@@ -148,32 +148,23 @@ function App() {
     setIsPlaying(true);
   };
 
-  // Function to parse text into clickable words, optimized for performance
+  // Simple function to render text with clickable words
   const renderTextWithClickableWords = (text) => {
     if (!text) return null;
     
-    // Clear the current word positions
-    wordPositionsRef.current = [];
-    
-    // Calculate paragraph offsets first
+    // Split text into paragraphs
     const paragraphs = text.split('\n');
-    const paragraphOffsets = [];
     let totalOffset = 0;
     
-    for (let i = 0; i < paragraphs.length; i++) {
-      paragraphOffsets.push(totalOffset);
-      totalOffset += paragraphs[i].length + 1; // +1 for the newline
-    }
-    
-    // Split text into paragraphs
     return paragraphs.map((paragraph, paraIndex) => {
       if (!paragraph.trim()) return <p key={`p-${paraIndex}`}>&nbsp;</p>;
       
-      // Get offset for this paragraph
-      const paraOffset = paragraphOffsets[paraIndex];
+      // Get the current paragraph offset
+      const paraOffset = totalOffset;
+      totalOffset += paragraph.length + 1; // +1 for newline
       
-      // Split paragraph into words but limit processing for large paragraphs
-      const words = paragraph.split(/(\s+)/);
+      // Split paragraph into words
+      const words = paragraph.split(/\b(\w+)\b/g);
       let wordOffset = paraOffset;
       
       return (
@@ -182,13 +173,14 @@ function App() {
             const currentOffset = wordOffset;
             wordOffset += word.length;
             
-            if (word.trim()) {
+            // Only make actual words clickable (not spaces, punctuation)
+            if (/\w+/.test(word)) {
               return (
                 <span 
                   key={`word-${paraIndex}-${wordIndex}`}
                   className="clickable-word"
                   onClick={() => handleWordClick(word, wordIndex, currentOffset)}
-                  style={{ cursor: 'pointer', padding: '0 1px' }}
+                  style={{ cursor: 'pointer' }}
                 >
                   {word}
                 </span>
