@@ -433,14 +433,75 @@ function App() {
     localStorage.setItem(bookmarkKey, JSON.stringify(bookmarks));
   }, [bookmarks, activeDocument]);
 
+  // Handle page navigation
+  const handlePageChange = (newPage) => {
+    // Update page state
+    setDisplayPage(newPage);
+    setCurrentPage(newPage);
+    
+    // Update current page text
+    if (docPages[newPage - 1]) {
+      setCurrentPageText(docPages[newPage - 1].text);
+    }
+    
+    // Find the first chunk that belongs to this page
+    if (chunkToPageMapping.pageToChunks && chunkToPageMapping.pageToChunks[newPage]) {
+      const firstChunkOnPage = chunkToPageMapping.pageToChunks[newPage][0];
+      
+      // If the found chunk is valid, update current chunk index
+      if (firstChunkOnPage !== undefined && textChunks[firstChunkOnPage]) {
+        setCurrentChunkIndex(firstChunkOnPage);
+        
+        // If currently speaking, update to speak from the new chunk
+        if (speaking && !paused) {
+          cancel();
+          speak(textChunks[firstChunkOnPage], { rate: playbackRate });
+          setIsPlaying(true);
+        }
+        
+        // Update playback context
+        setPlaybackContext({
+          chunkIndex: firstChunkOnPage,
+          pageIndex: newPage - 1
+        });
+        
+        // Update position tracking
+        lastPositionRef.current = {
+          page: newPage,
+          chunk: firstChunkOnPage,
+          position: 0
+        };
+      }
+    }
+  };
+
   // Synchronize page navigation with text chunks
   useEffect(() => {
-    if (textChunks.length > 0) {
+    if (textChunks.length > 0 && !chunkToPageMapping.chunkToPage) {
+      // If we don't have a proper mapping, fall back to the original behavior
       const estimatedChunksPerPage = Math.ceil(textChunks.length / totalPages);
       const currentEstimatedPage = Math.ceil((currentChunkIndex + 1) / estimatedChunksPerPage);
-      setDisplayPage(currentEstimatedPage);
+      if (currentEstimatedPage !== displayPage) {
+        setDisplayPage(currentEstimatedPage);
+        
+        // Update current page text
+        if (docPages[currentEstimatedPage - 1]) {
+          setCurrentPageText(docPages[currentEstimatedPage - 1].text);
+        }
+      }
+    } else if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[currentChunkIndex]) {
+      // Use our mapping to determine the correct page
+      const mappedPage = chunkToPageMapping.chunkToPage[currentChunkIndex];
+      if (mappedPage !== displayPage) {
+        setDisplayPage(mappedPage);
+        
+        // Update current page text
+        if (docPages[mappedPage - 1]) {
+          setCurrentPageText(docPages[mappedPage - 1].text);
+        }
+      }
     }
-  }, [currentChunkIndex, textChunks.length, totalPages]);
+  }, [currentChunkIndex, displayPage, textChunks.length, totalPages, chunkToPageMapping, docPages]);
 
   // Load bookmarks for current active document
   useEffect(() => {
