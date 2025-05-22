@@ -652,6 +652,82 @@ function App() {
           )}
         </div>
       </div>
+      
+      {/* Fixed Audio Controls Bar */}
+      <div className="audio-controls-bar">
+        <div className="playback-main-controls">
+          <button 
+            className="btn" 
+            onClick={handlePrevious} 
+            disabled={!activeDocument || currentChunkIndex === 0}
+          >
+            <FaBackward />
+          </button>
+          
+          <button 
+            className={`btn ${isPlaying ? 'btn-secondary' : ''}`} 
+            onClick={handlePlayPause} 
+            disabled={!activeDocument}
+          >
+            {speaking && !paused ? <FaPause /> : <FaPlay />}
+          </button>
+          
+          <button 
+            className="btn" 
+            onClick={handleNext} 
+            disabled={!activeDocument || currentChunkIndex === textChunks.length - 1}
+          >
+            <FaForward />
+          </button>
+          
+          <button 
+            className="btn btn-secondary" 
+            onClick={addBookmark} 
+            disabled={!activeDocument}
+          >
+            <FaBookmark />
+          </button>
+        </div>
+        
+        <div className="page-info">
+          {activeDocument && <span>Page {displayPage} of {totalPages}</span>}
+        </div>
+        
+        <div className="playback-settings">
+          <div className="voice-control">
+            <select 
+              className="select-control"
+              onChange={handleVoiceChange}
+              value={selectedVoiceIndex}
+              disabled={!activeDocument}
+            >
+              {voices && voices.length > 0 ? (
+                voices.map((voice, index) => (
+                  <option key={index} value={index}>
+                    {voice.name} ({voice.lang})
+                  </option>
+                ))
+              ) : (
+                <option value="">Loading voices...</option>
+              )}
+            </select>
+          </div>
+          
+          <div className="speed-control-container">
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={playbackRate}
+              onChange={handlePlaybackRateChange}
+              className="speed-control"
+              disabled={!activeDocument}
+            />
+            <div>{playbackRate}x</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
