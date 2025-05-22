@@ -176,13 +176,27 @@ const useSpeechSynthesis = () => {
     
     // Create a new utterance starting from the specified position
     const remainingText = currentTextRef.current.substring(charIndex);
-    const utterance = createUtterance(remainingText, options);
+    
+    // Create utterance directly instead of using createUtterance to avoid circular dependency
+    const utterance = new SpeechSynthesisUtterance(remainingText);
+    
+    // Apply voice
+    if (selectedVoiceRef.current) {
+      utterance.voice = selectedVoiceRef.current;
+    }
+    
+    // Apply options (rate, pitch, etc.)
+    Object.keys(options).forEach(option => {
+      if (option in utterance) {
+        utterance[option] = options[option];
+      }
+    });
     
     // Update position tracking
     currentPositionRef.current = charIndex;
     
-    speak(utterance, options);
-  }, [speak, createUtterance]);
+    speak(utterance);
+  }, [speak]);
   
   /**
    * Function to change the voice for speech synthesis
