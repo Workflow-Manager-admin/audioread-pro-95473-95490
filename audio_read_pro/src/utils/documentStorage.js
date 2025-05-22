@@ -58,9 +58,21 @@ export const addDocument = (documentData) => {
       dateAdded: new Date().toISOString(),
     };
     
+    // Make sure the document has the required fields
+    if (!newDocument.text || !newDocument.title) {
+      console.error('Document must have text and title');
+      return null;
+    }
+    
+    // Make sure textChunks is an array
+    if (!Array.isArray(newDocument.textChunks)) {
+      newDocument.textChunks = newDocument.text ? 
+        newDocument.text.split(/(?<=\.)\s+/) : [];
+    }
+    
     documents.push(newDocument);
-    saveDocuments(documents);
-    return newDocument;
+    const success = saveDocuments(documents);
+    return success ? newDocument : null;
   } catch (error) {
     console.error('Failed to add document:', error);
     return null;
