@@ -73,14 +73,32 @@ function App() {
     if (selectedDoc) {
       // Update the document text and related state variables
       setDocumentText(selectedDoc.text);
-      setTotalPages(selectedDoc.pageCount || 1);
+      const pageCount = selectedDoc.pageCount || 1;
+      setTotalPages(pageCount);
       setCurrentPage(1);
       setDisplayPage(1);
       
-      // Generate text chunks
+      // Generate text chunks for speech
       const chunks = splitTextIntoChunks(selectedDoc.text || '');
       setTextChunks(chunks);
       setCurrentChunkIndex(0);
+      
+      // Split text into pages for navigation
+      const pages = splitTextIntoPages(selectedDoc.text || '', pageCount);
+      setDocPages(pages);
+      
+      // Set initial page text
+      if (pages.length > 0) {
+        setCurrentPageText(pages[0].text);
+      }
+      
+      // Create mapping between chunks and pages
+      const mapping = mapChunksToPages(chunks, pages);
+      setChunkToPageMapping(mapping);
+      
+      // Reset position tracking
+      lastPositionRef.current = { page: 1, chunk: 0, position: 0 };
+      
       setError(null);
     }
   };
