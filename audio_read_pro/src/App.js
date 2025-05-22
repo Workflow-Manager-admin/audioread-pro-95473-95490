@@ -4,12 +4,12 @@ import { useSpeechSynthesis } from 'usehooks-ts';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
 import { pdfjs } from 'react-pdf';
 import { processDocument, splitTextIntoChunks } from './utils/documentUtils';
+import './App.css';
 
 // Initialize PDF.js worker
 if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions.workerSrc) {
   pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 }
-import './App.css';
 
 function App() {
   const [document, setDocument] = useState(null);
