@@ -699,11 +699,57 @@ function App() {
     }
   }, [activeDocument]);
 
+  // Set up the word boundary listener when speaking status changes
+  useEffect(() => {
+    // Only register listener when speaking and not paused
+    if (speaking && !paused) {
+      // Enable auto-scrolling
+      autoScrollingRef.current = true;
+      
+      // Register the word boundary listener
+      if (!wordBoundaryUnsubscribeRef.current) {
+        wordBoundaryUnsubscribeRef.current = registerWordBoundaryListener(handleWordBoundary);
+      }
+    } else {
+      // If not speaking or paused, we can disable auto-scrolling
+      autoScrollingRef.current = false;
+    }
+    
+    // Clean up on unmount or when speaking state changes
+    return () => {
+      if (wordBoundaryUnsubscribeRef.current) {
+        wordBoundaryUnsubscribeRef.current();
+        wordBoundaryUnsubscribeRef.current = null;
+      }
+    };
+  }, [speaking, paused, registerWordBoundaryListener, handleWordBoundary]);
+  
+  // Clean up highlighting when changing pages
+  useEffect(() => {
+    // Reset the word elements mapping when page changes
+    wordElementsRef.current = {};
+    currentWordRef.current = null;
+    
+    // Return cleanup function
+    return () => {
+      const highlightedElements = document.querySelectorAll('.word-current, .word-spoken');
+      highlightedElements.forEach(el => {
+        el.classList.remove('word-current', 'word-spoken');
+      });
+    };
+  }, [currentPage]);
+
   // Cleanup speech synthesis on unmount
   useEffect(() => {
     return () => {
       if (speaking) {
         cancel();
+      }
+      
+      // Clean up word boundary listener
+      if (wordBoundaryUnsubscribeRef.current) {
+        wordBoundaryUnsubscribeRef.current();
+        wordBoundaryUnsubscribeRef.current = null;
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
