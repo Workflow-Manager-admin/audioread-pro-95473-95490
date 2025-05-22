@@ -205,26 +205,88 @@ function App() {
     }
   };
 
-  // Handle next chunk
+  // Handle next chunk with enhanced playback continuity
   const handleNext = () => {
     if (currentChunkIndex < textChunks.length - 1) {
-      setCurrentChunkIndex(prev => prev + 1);
+      const nextChunkIndex = currentChunkIndex + 1;
+      setCurrentChunkIndex(nextChunkIndex);
+      
+      // Update page if the chunk belongs to a different page
+      if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[nextChunkIndex]) {
+        const nextPage = chunkToPageMapping.chunkToPage[nextChunkIndex];
+        if (nextPage !== displayPage) {
+          setDisplayPage(nextPage);
+          setCurrentPage(nextPage);
+          
+          // Update current page text
+          if (docPages[nextPage - 1]) {
+            setCurrentPageText(docPages[nextPage - 1].text);
+          }
+        }
+      }
+      
+      // Handle playback
       if (speaking) {
         cancel();
       }
-      speak(textChunks[currentChunkIndex + 1], { rate: playbackRate });
+      speak(textChunks[nextChunkIndex], { rate: playbackRate });
+      
+      // Update playback context
+      setPlaybackContext({
+        chunkIndex: nextChunkIndex,
+        pageIndex: displayPage - 1
+      });
+      
+      // Reset position tracking
+      lastPositionRef.current = {
+        page: displayPage,
+        chunk: nextChunkIndex,
+        position: 0
+      };
+      
       setIsPlaying(true);
     }
   };
 
-  // Handle previous chunk
+  // Handle previous chunk with enhanced playback continuity
   const handlePrevious = () => {
     if (currentChunkIndex > 0) {
-      setCurrentChunkIndex(prev => prev - 1);
+      const prevChunkIndex = currentChunkIndex - 1;
+      setCurrentChunkIndex(prevChunkIndex);
+      
+      // Update page if the chunk belongs to a different page
+      if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[prevChunkIndex]) {
+        const prevPage = chunkToPageMapping.chunkToPage[prevChunkIndex];
+        if (prevPage !== displayPage) {
+          setDisplayPage(prevPage);
+          setCurrentPage(prevPage);
+          
+          // Update current page text
+          if (docPages[prevPage - 1]) {
+            setCurrentPageText(docPages[prevPage - 1].text);
+          }
+        }
+      }
+      
+      // Handle playback
       if (speaking) {
         cancel();
       }
-      speak(textChunks[currentChunkIndex - 1], { rate: playbackRate });
+      speak(textChunks[prevChunkIndex], { rate: playbackRate });
+      
+      // Update playback context
+      setPlaybackContext({
+        chunkIndex: prevChunkIndex,
+        pageIndex: displayPage - 1
+      });
+      
+      // Reset position tracking
+      lastPositionRef.current = {
+        page: displayPage,
+        chunk: prevChunkIndex,
+        position: 0
+      };
+      
       setIsPlaying(true);
     }
   };
