@@ -252,16 +252,22 @@ function App() {
               <select 
                 className="select-control"
                 onChange={(e) => {
-                  const utterance = new SpeechSynthesisUtterance('');
-                  utterance.voice = voices[e.target.value];
-                  speak(utterance);
+                  if (voices && voices.length > 0) {
+                    const utterance = new SpeechSynthesisUtterance('');
+                    utterance.voice = voices[e.target.value];
+                    speak(utterance);
+                  }
                 }}
               >
-                {voices.map((voice, index) => (
-                  <option key={index} value={index}>
-                    {voice.name} ({voice.lang})
-                  </option>
-                ))}
+                {voices && voices.length > 0 ? (
+                  voices.map((voice, index) => (
+                    <option key={index} value={index}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Loading voices...</option>
+                )}
               </select>
 
               <h3>Playback Speed</h3>
