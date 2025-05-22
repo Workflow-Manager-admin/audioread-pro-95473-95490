@@ -117,10 +117,27 @@ const useSpeechSynthesis = () => {
       setPaused(false);
     };
     
-    // Handle boundary events to track position
+    // Handle boundary events to track position with enhanced word identification
     utteranceToSpeak.onboundary = (event) => {
       if (event.name === 'word') {
         currentPositionRef.current = event.charIndex;
+        
+        // Store information about the current word being spoken
+        if (event.charIndex < currentTextRef.current.length) {
+          // Extract the current word
+          const text = currentTextRef.current;
+          const wordStart = event.charIndex;
+          const nextSpace = text.indexOf(' ', wordStart);
+          const wordEnd = nextSpace !== -1 ? nextSpace : text.length;
+          const currentWord = text.substring(wordStart, wordEnd).trim();
+          
+          if (currentWord) {
+            lastWordRef.current = currentWord;
+            
+            // Update word index in context
+            playbackContextRef.current.wordIndex = event.charIndex;
+          }
+        }
       }
     };
     
