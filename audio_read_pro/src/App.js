@@ -332,7 +332,8 @@ function App() {
         cancel();
       }
     };
-  }, [speaking, cancel]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speaking]);
 
   if (!window.speechSynthesis) {
     return <div className="error-message">Text-to-speech is not supported in your browser.</div>;
