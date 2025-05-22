@@ -62,13 +62,23 @@ function App() {
     } else if (textChunks.length > 0) {
       const utterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex]);
       utterance.rate = playbackRate;
-      utterance.voice = voices.find(v => v.default) || null;
+      
+      // Safely set voice if voices array is available
+      if (voices && voices.length > 0) {
+        utterance.voice = voices.find(v => v.default) || voices[0];
+      }
+      
       utterance.onend = () => {
         if (currentChunkIndex < textChunks.length - 1) {
           setCurrentChunkIndex(prev => prev + 1);
           const nextUtterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex + 1]);
           nextUtterance.rate = playbackRate;
-          nextUtterance.voice = voices.find(v => v.default) || null;
+          
+          // Safely set voice if voices array is available
+          if (voices && voices.length > 0) {
+            nextUtterance.voice = voices.find(v => v.default) || voices[0];
+          }
+          
           speak(nextUtterance);
         } else {
           setIsPlaying(false);
