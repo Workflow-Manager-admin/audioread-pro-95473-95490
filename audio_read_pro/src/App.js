@@ -352,13 +352,28 @@ function App() {
     setIsPlaying(true);
   };
 
-  // Simplified function to render text with clickable words
+  // Render text with clickable words - updated to show only current page content
   const renderTextWithClickableWords = (text) => {
     if (!text) return null;
     
+    // Use current page text instead of full document text
+    const textToRender = currentPageText || text;
+    
+    // Calculate offset based on current page position in full document
+    let pageStartOffset = 0;
+    
+    // Find the starting offset of the current page in the full document text
+    if (displayPage > 1 && docPages.length >= displayPage) {
+      for (let i = 0; i < displayPage - 1; i++) {
+        if (docPages[i]) {
+          pageStartOffset += docPages[i].text.length + 2; // +2 for page separator
+        }
+      }
+    }
+    
     // Split text into paragraphs
-    const paragraphs = text.split('\n');
-    let totalOffset = 0;
+    const paragraphs = textToRender.split('\n');
+    let totalOffset = pageStartOffset; // Start from the page offset
     
     return paragraphs.map((paragraph, paraIndex) => {
       if (!paragraph.trim()) return <p key={`p-${paraIndex}`}>&nbsp;</p>;
