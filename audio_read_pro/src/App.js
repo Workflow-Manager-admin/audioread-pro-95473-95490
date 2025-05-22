@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useDropzone } from 'react-dropzone';
+import React, { useState, useEffect, useRef } from 'react';
 import useSpeechSynthesis from './hooks/useSpeechSynthesis';
+import useDocumentLibrary from './hooks/useDocumentLibrary';
+import DocumentLibrary from './components/DocumentLibrary';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
 import { pdfjs } from 'react-pdf';
-import { processDocument, splitTextIntoChunks } from './utils/documentUtils';
+import { splitTextIntoChunks } from './utils/documentUtils';
 import './App.css';
 
 // Initialize PDF.js worker
@@ -12,7 +13,6 @@ if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions.workerSrc) {
 }
 
 function App() {
-  const [document, setDocument] = useState(null);
   const [documentText, setDocumentText] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -28,6 +28,7 @@ function App() {
   // Create a ref to store word positions in the document
   const wordPositionsRef = useRef([]);
 
+  // Use our custom hooks for speech synthesis and document management
   const { 
     speak, 
     speaking, 
@@ -39,35 +40,16 @@ function App() {
     setVoice,
     speakFromPosition 
   } = useSpeechSynthesis();
-
-  const onDrop = useCallback(async (acceptedFiles) => {
-    try {
-      const file = acceptedFiles[0];
-      setDocument(file);
-      
-      const { text, pageCount } = await processDocument(file);
-      setDocumentText(text);
-      setTotalPages(pageCount);
-      setCurrentPage(1);
-      
-      const chunks = splitTextIntoChunks(text);
-      setTextChunks(chunks);
-      setCurrentChunkIndex(0);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    }
-  }, []);
-
-  const { getRootProps, getInputProps } = useDropzone({
-    onDrop,
-    accept: {
-      'application/pdf': ['.pdf'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'text/plain': ['.txt']
-    },
-    multiple: false
-  });
+  
+  const {
+    documents,
+    activeDocument,
+    loading: loadingDocuments,
+    error: documentError,
+    addNewDocument,
+    removeDocumentFromLibrary,
+    setActiveDocumentById
+  } = useDocumentLibrary();
 
   // Effect to update the selected voice when voices are loaded
   useEffect(() => {
