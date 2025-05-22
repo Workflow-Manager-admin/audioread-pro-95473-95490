@@ -148,47 +148,54 @@ function App() {
     setIsPlaying(true);
   };
 
-  // Function to parse text into clickable words
+  // Function to parse text into clickable words, optimized for performance
   const renderTextWithClickableWords = (text) => {
     if (!text) return null;
     
+    // Clear the current word positions
+    wordPositionsRef.current = [];
+    
+    // Calculate paragraph offsets first
+    const paragraphs = text.split('\n');
+    const paragraphOffsets = [];
+    let totalOffset = 0;
+    
+    for (let i = 0; i < paragraphs.length; i++) {
+      paragraphOffsets.push(totalOffset);
+      totalOffset += paragraphs[i].length + 1; // +1 for the newline
+    }
+    
     // Split text into paragraphs
-    return text.split('\n').map((paragraph, paraIndex) => {
+    return paragraphs.map((paragraph, paraIndex) => {
       if (!paragraph.trim()) return <p key={`p-${paraIndex}`}>&nbsp;</p>;
       
-      // Calculate the total offset for this paragraph
-      let totalOffset = 0;
-      for (let i = 0; i < paraIndex; i++) {
-        totalOffset += text.split('\n')[i].length + 1; // +1 for the newline
-      }
+      // Get offset for this paragraph
+      const paraOffset = paragraphOffsets[paraIndex];
       
-      // Split paragraph into words
+      // Split paragraph into words but limit processing for large paragraphs
       const words = paragraph.split(/(\s+)/);
+      let wordOffset = paraOffset;
       
       return (
         <p key={`p-${paraIndex}`}>
           {words.map((word, wordIndex) => {
-            const currentOffset = totalOffset;
-            totalOffset += word.length;
+            const currentOffset = wordOffset;
+            wordOffset += word.length;
             
-            // Store word position for future reference
-            wordPositionsRef.current.push({
-              word,
-              offset: currentOffset
-            });
-            
-            return word.trim() ? (
-              <span 
-                key={`word-${paraIndex}-${wordIndex}`}
-                className="clickable-word"
-                onClick={() => handleWordClick(word, wordIndex, currentOffset)}
-                style={{ cursor: 'pointer', padding: '0 1px' }}
-              >
-                {word}
-              </span>
-            ) : (
-              <span key={`space-${paraIndex}-${wordIndex}`}>{word}</span>
-            );
+            if (word.trim()) {
+              return (
+                <span 
+                  key={`word-${paraIndex}-${wordIndex}`}
+                  className="clickable-word"
+                  onClick={() => handleWordClick(word, wordIndex, currentOffset)}
+                  style={{ cursor: 'pointer', padding: '0 1px' }}
+                >
+                  {word}
+                </span>
+              );
+            } else {
+              return <span key={`space-${paraIndex}-${wordIndex}`}>{word}</span>;
+            }
           })}
         </p>
       );
