@@ -352,6 +352,48 @@ function App() {
     setIsPlaying(true);
   };
 
+  // Handle page navigation
+  const handlePageChange = (newPage) => {
+    // Update page state
+    setDisplayPage(newPage);
+    setCurrentPage(newPage);
+    
+    // Update current page text
+    if (docPages[newPage - 1]) {
+      setCurrentPageText(docPages[newPage - 1].text);
+    }
+    
+    // Find the first chunk that belongs to this page
+    if (chunkToPageMapping.pageToChunks && chunkToPageMapping.pageToChunks[newPage]) {
+      const firstChunkOnPage = chunkToPageMapping.pageToChunks[newPage][0];
+      
+      // If the found chunk is valid, update current chunk index
+      if (firstChunkOnPage !== undefined && textChunks[firstChunkOnPage]) {
+        setCurrentChunkIndex(firstChunkOnPage);
+        
+        // If currently speaking, update to speak from the new chunk
+        if (speaking && !paused) {
+          cancel();
+          speak(textChunks[firstChunkOnPage], { rate: playbackRate });
+          setIsPlaying(true);
+        }
+        
+        // Update playback context
+        setPlaybackContext({
+          chunkIndex: firstChunkOnPage,
+          pageIndex: newPage - 1
+        });
+        
+        // Update position tracking
+        lastPositionRef.current = {
+          page: newPage,
+          chunk: firstChunkOnPage,
+          position: 0
+        };
+      }
+    }
+  };
+
   // Render text with clickable words - updated to show only current page content
   const renderTextWithClickableWords = (text) => {
     if (!text) return null;
@@ -467,57 +509,6 @@ function App() {
     }
   };
 
-  // Save bookmarks with current active document
-  useEffect(() => {
-    if (!activeDocument) return;
-    
-    // Store bookmarks with the document ID
-    const bookmarkKey = `audioReadProBookmarks_${activeDocument.id}`;
-    localStorage.setItem(bookmarkKey, JSON.stringify(bookmarks));
-  }, [bookmarks, activeDocument]);
-
-  // Handle page navigation
-  const handlePageChange = (newPage) => {
-    // Update page state
-    setDisplayPage(newPage);
-    setCurrentPage(newPage);
-    
-    // Update current page text
-    if (docPages[newPage - 1]) {
-      setCurrentPageText(docPages[newPage - 1].text);
-    }
-    
-    // Find the first chunk that belongs to this page
-    if (chunkToPageMapping.pageToChunks && chunkToPageMapping.pageToChunks[newPage]) {
-      const firstChunkOnPage = chunkToPageMapping.pageToChunks[newPage][0];
-      
-      // If the found chunk is valid, update current chunk index
-      if (firstChunkOnPage !== undefined && textChunks[firstChunkOnPage]) {
-        setCurrentChunkIndex(firstChunkOnPage);
-        
-        // If currently speaking, update to speak from the new chunk
-        if (speaking && !paused) {
-          cancel();
-          speak(textChunks[firstChunkOnPage], { rate: playbackRate });
-          setIsPlaying(true);
-        }
-        
-        // Update playback context
-        setPlaybackContext({
-          chunkIndex: firstChunkOnPage,
-          pageIndex: newPage - 1
-        });
-        
-        // Update position tracking
-        lastPositionRef.current = {
-          page: newPage,
-          chunk: firstChunkOnPage,
-          position: 0
-        };
-      }
-    }
-  };
-
   // Synchronize page navigation with text chunks
   useEffect(() => {
     if (textChunks.length > 0 && !chunkToPageMapping.chunkToPage) {
@@ -545,6 +536,15 @@ function App() {
       }
     }
   }, [currentChunkIndex, displayPage, textChunks.length, totalPages, chunkToPageMapping, docPages]);
+
+  // Save bookmarks with current active document
+  useEffect(() => {
+    if (!activeDocument) return;
+    
+    // Store bookmarks with the document ID
+    const bookmarkKey = `audioReadProBookmarks_${activeDocument.id}`;
+    localStorage.setItem(bookmarkKey, JSON.stringify(bookmarks));
+  }, [bookmarks, activeDocument]);
 
   // Load bookmarks for current active document
   useEffect(() => {
