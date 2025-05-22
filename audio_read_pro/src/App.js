@@ -102,7 +102,7 @@ function App() {
     if (voices && voices.length > 0 && selectedVoiceIndex < voices.length) {
       setVoice(voices[selectedVoiceIndex]);
     }
-  }, [voices, selectedVoiceIndex, setVoice]);
+  }, [voices, selectedVoiceIndex]);  // Remove setVoice from dependencies
   
   // Effect to update content when active document changes
   useEffect(() => {
@@ -348,23 +348,33 @@ function App() {
         </div>
 
         <div className="controls-panel">
+          {/* Document Library Component */}
+          <DocumentLibrary
+            documents={documents}
+            activeDocument={activeDocument}
+            onAddDocument={handleAddDocument}
+            onRemoveDocument={handleRemoveDocument}
+            onSelectDocument={handleSelectDocument}
+            loading={loadingDocuments}
+          />
+          
           <div className="controls-section">
             <h3>Playback Controls</h3>
             <div className="playback-controls">
-              <button className="btn" onClick={handlePrevious} disabled={!document || currentChunkIndex === 0}>
+              <button className="btn" onClick={handlePrevious} disabled={!activeDocument || currentChunkIndex === 0}>
                 <FaBackward />
               </button>
               <button 
                 className={`btn ${isPlaying ? 'btn-secondary' : ''}`} 
                 onClick={handlePlayPause} 
-                disabled={!document}
+                disabled={!activeDocument}
               >
                 {speaking && !paused ? <FaPause /> : <FaPlay />}
               </button>
-              <button className="btn" onClick={handleNext} disabled={!document || currentChunkIndex === textChunks.length - 1}>
+              <button className="btn" onClick={handleNext} disabled={!activeDocument || currentChunkIndex === textChunks.length - 1}>
                 <FaForward />
               </button>
-              <button className="btn btn-secondary" onClick={addBookmark} disabled={!document}>
+              <button className="btn btn-secondary" onClick={addBookmark} disabled={!activeDocument}>
                 <FaBookmark />
               </button>
             </div>
@@ -417,9 +427,9 @@ function App() {
             </div>
           )}
 
-          {error && (
+          {(error || documentError) && (
             <div className="error-message">
-              {error}
+              {error || documentError}
             </div>
           )}
         </div>
