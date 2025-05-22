@@ -102,7 +102,8 @@ function App() {
     if (voices && voices.length > 0 && selectedVoiceIndex < voices.length) {
       setVoice(voices[selectedVoiceIndex]);
     }
-  }, [voices, selectedVoiceIndex]);  // Remove setVoice from dependencies
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voices, selectedVoiceIndex]);
   
   // Effect to update content when active document changes
   useEffect(() => {
