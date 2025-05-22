@@ -238,22 +238,35 @@ function App() {
   };
 
   const addBookmark = () => {
+    if (!activeDocument) return;
+    
     const newBookmark = {
       page: currentPage,
       chunk: currentChunkIndex,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      documentId: activeDocument.id
     };
     setBookmarks(prev => [...prev, newBookmark]);
   };
 
   const jumpToBookmark = (bookmark) => {
+    // Ensure we're using the correct document
+    if (activeDocument && bookmark.documentId && bookmark.documentId !== activeDocument.id) {
+      setActiveDocumentById(bookmark.documentId);
+    }
+    
     setCurrentPage(bookmark.page);
     setCurrentChunkIndex(bookmark.chunk);
+    
     if (speaking) {
       cancel();
     }
-    speak(textChunks[bookmark.chunk], { rate: playbackRate });
-    setIsPlaying(true);
+    
+    // Only try to speak if we have chunks available
+    if (textChunks.length > bookmark.chunk) {
+      speak(textChunks[bookmark.chunk], { rate: playbackRate });
+      setIsPlaying(true);
+    }
   };
 
   // Handle voice change
