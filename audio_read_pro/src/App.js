@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import useSpeechSynthesis from './hooks/useSpeechSynthesis';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
@@ -23,8 +23,22 @@ function App() {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(0);
+  
+  // Create a ref to store word positions in the document
+  const wordPositionsRef = useRef([]);
 
-  const { speak, speaking, voices, cancel } = useSpeechSynthesis();
+  const { 
+    speak, 
+    speaking, 
+    paused,
+    pause,
+    resume,
+    voices, 
+    cancel, 
+    setVoice,
+    speakFromPosition 
+  } = useSpeechSynthesis();
 
   const onDrop = useCallback(async (acceptedFiles) => {
     try {
@@ -55,74 +69,130 @@ function App() {
     multiple: false
   });
 
+  // Effect to update the selected voice when voices are loaded
+  useEffect(() => {
+    if (voices && voices.length > 0 && selectedVoiceIndex < voices.length) {
+      setVoice(voices[selectedVoiceIndex]);
+    }
+  }, [voices, selectedVoiceIndex, setVoice]);
+
+  // Handle play/pause button
   const handlePlayPause = () => {
     if (speaking) {
-      cancel();
-      setIsPlaying(false);
-    } else if (textChunks.length > 0) {
-      const utterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex]);
-      utterance.rate = playbackRate;
-      
-      // Safely set voice if voices array is available
-      if (voices && voices.length > 0) {
-        utterance.voice = voices.find(v => v.default) || voices[0];
+      if (paused) {
+        resume();
+      } else {
+        pause();
       }
-      
-      utterance.onend = () => {
-        if (currentChunkIndex < textChunks.length - 1) {
-          setCurrentChunkIndex(prev => prev + 1);
-          const nextUtterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex + 1]);
-          nextUtterance.rate = playbackRate;
-          
-          // Safely set voice if voices array is available
-          if (voices && voices.length > 0) {
-            nextUtterance.voice = voices.find(v => v.default) || voices[0];
-          }
-          
-          speak(nextUtterance);
-        } else {
-          setIsPlaying(false);
-        }
-      };
-      speak(utterance);
+    } else if (textChunks.length > 0) {
+      speak(textChunks[currentChunkIndex], { rate: playbackRate });
       setIsPlaying(true);
     }
+    setIsPlaying(!paused);
   };
 
+  // Handle next chunk
   const handleNext = () => {
     if (currentChunkIndex < textChunks.length - 1) {
       setCurrentChunkIndex(prev => prev + 1);
       if (speaking) {
         cancel();
-        const utterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex + 1]);
-        utterance.rate = playbackRate;
-        
-        // Safely set voice if voices array is available
-        if (voices && voices.length > 0) {
-          utterance.voice = voices.find(v => v.default) || voices[0];
-        }
-        
-        speak(utterance);
       }
+      speak(textChunks[currentChunkIndex + 1], { rate: playbackRate });
+      setIsPlaying(true);
     }
   };
 
+  // Handle previous chunk
   const handlePrevious = () => {
     if (currentChunkIndex > 0) {
       setCurrentChunkIndex(prev => prev - 1);
       if (speaking) {
         cancel();
-        const utterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex - 1]);
-        utterance.rate = playbackRate;
-        
-        // Safely set voice if voices array is available
-        if (voices && voices.length > 0) {
-          utterance.voice = voices.find(v => v.default) || voices[0];
-        }
-        
-        speak(utterance);
       }
+      speak(textChunks[currentChunkIndex - 1], { rate: playbackRate });
+      setIsPlaying(true);
     }
+  };
+
+  // Handle word click to start speaking from that position
+  const handleWordClick = (word, wordIndex, totalOffset) => {
+    // Find the character position of this word in the full text
+    const charPosition = totalOffset;
+    
+    // Find which chunk this position belongs to
+    let chunkIndex = 0;
+    let chunkStart = 0;
+    
+    for (let i = 0; i < textChunks.length; i++) {
+      const chunkEnd = chunkStart + textChunks[i].length;
+      if (charPosition >= chunkStart && charPosition < chunkEnd) {
+        chunkIndex = i;
+        break;
+      }
+      chunkStart = chunkEnd;
+    }
+    
+    // Update current chunk index
+    setCurrentChunkIndex(chunkIndex);
+    
+    // Get the relative position within the chunk
+    const relativePosition = charPosition - chunkStart;
+    
+    // Speak from this position
+    if (speaking) {
+      cancel();
+    }
+    
+    speakFromPosition(relativePosition, { rate: playbackRate });
+    setIsPlaying(true);
+  };
+
+  // Function to parse text into clickable words
+  const renderTextWithClickableWords = (text) => {
+    if (!text) return null;
+    
+    // Split text into paragraphs
+    return text.split('\n').map((paragraph, paraIndex) => {
+      if (!paragraph.trim()) return <p key={`p-${paraIndex}`}>&nbsp;</p>;
+      
+      // Calculate the total offset for this paragraph
+      let totalOffset = 0;
+      for (let i = 0; i < paraIndex; i++) {
+        totalOffset += text.split('\n')[i].length + 1; // +1 for the newline
+      }
+      
+      // Split paragraph into words
+      const words = paragraph.split(/(\s+)/);
+      
+      return (
+        <p key={`p-${paraIndex}`}>
+          {words.map((word, wordIndex) => {
+            const currentOffset = totalOffset;
+            totalOffset += word.length;
+            
+            // Store word position for future reference
+            wordPositionsRef.current.push({
+              word,
+              offset: currentOffset
+            });
+            
+            return word.trim() ? (
+              <span 
+                key={`word-${paraIndex}-${wordIndex}`}
+                className="clickable-word"
+                onClick={() => handleWordClick(word, wordIndex, currentOffset)}
+                style={{ cursor: 'pointer', padding: '0 1px' }}
+              >
+                {word}
+              </span>
+            ) : (
+              <span key={`space-${paraIndex}-${wordIndex}`}>{word}</span>
+            );
+          })}
+        </p>
+      );
+    });
   };
 
   const addBookmark = () => {
@@ -139,15 +209,30 @@ function App() {
     setCurrentChunkIndex(bookmark.chunk);
     if (speaking) {
       cancel();
-      const utterance = new SpeechSynthesisUtterance(textChunks[bookmark.chunk]);
-      utterance.rate = playbackRate;
-      
-      // Safely set voice if voices array is available
-      if (voices && voices.length > 0) {
-        utterance.voice = voices.find(v => v.default) || voices[0];
-      }
-      
-      speak(utterance);
+    }
+    speak(textChunks[bookmark.chunk], { rate: playbackRate });
+    setIsPlaying(true);
+  };
+
+  // Handle voice change
+  const handleVoiceChange = (e) => {
+    const voiceIndex = parseInt(e.target.value);
+    setSelectedVoiceIndex(voiceIndex);
+    
+    if (voices && voices.length > 0) {
+      setVoice(voices[voiceIndex]);
+    }
+  };
+
+  // Handle playback rate change
+  const handlePlaybackRateChange = (e) => {
+    const newRate = parseFloat(e.target.value);
+    setPlaybackRate(newRate);
+    
+    // If currently speaking, update the rate
+    if (speaking && !paused) {
+      cancel();
+      speak(textChunks[currentChunkIndex], { rate: newRate });
     }
   };
 
@@ -193,9 +278,7 @@ function App() {
           {document ? (
             <>
               <div className="document-content">
-                {documentText.split('\n').map((paragraph, index) => (
-                  <p key={index}>{paragraph}</p>
-                ))}
+                {renderTextWithClickableWords(documentText)}
               </div>
               <div className="page-navigation">
                 <button 
@@ -237,7 +320,7 @@ function App() {
                 onClick={handlePlayPause} 
                 disabled={!document}
               >
-                {speaking ? <FaPause /> : <FaPlay />}
+                {speaking && !paused ? <FaPause /> : <FaPlay />}
               </button>
               <button className="btn" onClick={handleNext} disabled={!document || currentChunkIndex === textChunks.length - 1}>
                 <FaForward />
@@ -251,13 +334,8 @@ function App() {
               <h3>Voice Settings</h3>
               <select 
                 className="select-control"
-                onChange={(e) => {
-                  if (voices && voices.length > 0) {
-                    const utterance = new SpeechSynthesisUtterance('');
-                    utterance.voice = voices[e.target.value];
-                    speak(utterance);
-                  }
-                }}
+                onChange={handleVoiceChange}
+                value={selectedVoiceIndex}
               >
                 {voices && voices.length > 0 ? (
                   voices.map((voice, index) => (
@@ -277,7 +355,7 @@ function App() {
                 max="2"
                 step="0.1"
                 value={playbackRate}
-                onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
+                onChange={handlePlaybackRateChange}
                 className="speed-control"
               />
               <div>{playbackRate}x</div>

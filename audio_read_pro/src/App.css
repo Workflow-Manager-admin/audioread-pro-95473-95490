@@ -137,6 +137,16 @@
   background-color: #f0f0f0;
 }
 
+.clickable-word {
+  transition: background-color 0.2s ease;
+}
+
+.clickable-word:hover {
+  background-color: rgba(0, 102, 204, 0.1);
+  text-decoration: underline;
+  color: var(--primary-color);
+}
+
 .loading-indicator {
   display: flex;
   justify-content: center;
