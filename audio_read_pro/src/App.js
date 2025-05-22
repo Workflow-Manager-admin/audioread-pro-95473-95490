@@ -176,7 +176,11 @@ function App() {
               <button className="btn" onClick={handlePrevious} disabled={!document || currentChunkIndex === 0}>
                 <FaBackward />
               </button>
-              <button className="btn" onClick={handlePlayPause} disabled={!document}>
+              <button 
+                className={`btn ${isPlaying ? 'btn-secondary' : ''}`} 
+                onClick={handlePlayPause} 
+                disabled={!document}
+              >
                 {speaking ? <FaPause /> : <FaPlay />}
               </button>
               <button className="btn" onClick={handleNext} disabled={!document || currentChunkIndex === textChunks.length - 1}>
