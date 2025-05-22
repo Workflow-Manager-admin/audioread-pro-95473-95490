@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { useSpeechSynthesis } from 'usehooks-ts';
+import useSpeechSynthesis from './hooks/useSpeechSynthesis';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
 import { pdfjs } from 'react-pdf';
 import { processDocument, splitTextIntoChunks } from './utils/documentUtils';
