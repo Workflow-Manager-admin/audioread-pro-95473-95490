@@ -83,8 +83,7 @@ const useDocumentLibrary = () => {
         title: file.name,
         text,
         pageCount,
-        type: file.name.split('.').pop().toLowerCase(),
-        textChunks: splitTextIntoChunks(text)
+        type: file.name.split('.').pop().toLowerCase()
       };
       
       // Add to storage
