@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useSpeechSynthesis from './hooks/useSpeechSynthesis';
 import useDocumentLibrary from './hooks/useDocumentLibrary';
 import DocumentLibrary from './components/DocumentLibrary';
@@ -42,6 +42,12 @@ function App() {
   
   // Create refs to store context between renders
   const wordPositionsRef = useRef([]);
+  const documentContentRef = useRef(null);
+  const currentWordRef = useRef(null);
+  const wordElementsRef = useRef({});
+  const autoScrollingRef = useRef(false);
+  const wordBoundaryUnsubscribeRef = useRef(null);
+  
   const lastPositionRef = useRef({ 
     page: 1, 
     chunk: 0, 
@@ -65,7 +71,8 @@ function App() {
     setVoice,
     speakFromPosition,
     setPlaybackContext,
-    getPlaybackContext
+    getPlaybackContext,
+    registerWordBoundaryListener
   } = useSpeechSynthesis();
   
   const {
