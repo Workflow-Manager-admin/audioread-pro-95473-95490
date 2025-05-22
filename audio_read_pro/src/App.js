@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { useSpeechSynthesis } from 'react-speech-kit';
+import { useSpeechSynthesis } from 'usehooks-ts';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
 import { processDocument, splitTextIntoChunks } from './utils/documentUtils';
 import './App.css';
