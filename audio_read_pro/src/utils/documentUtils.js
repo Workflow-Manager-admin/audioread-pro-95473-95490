@@ -56,6 +56,12 @@ export const processDocument = async (file) => {
   }
 };
 
+/**
+ * Split document text into chunks for speech synthesis
+ * @param {string} text - The document text
+ * @param {number} maxChunkSize - Maximum size of each chunk in characters
+ * @returns {Array} Array of text chunks
+ */
 export const splitTextIntoChunks = (text, maxChunkSize = 5000) => {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
   const chunks = [];
@@ -120,7 +126,7 @@ export const splitTextIntoPages = (text, pageCount = 1, avgWordsPerPage = 500) =
   
   // Fallback: Split by word count for documents without clear page structure
   const words = text.match(/\S+/g) || [];
-  const wordsPerPage = words.length / pageCount;
+  const wordsPerPage = Math.ceil(words.length / pageCount);
   const pages = [];
   
   let currentPage = '';
@@ -171,44 +177,27 @@ export const mapChunksToPages = (chunks, pages) => {
     pageToChunks: {} // Map page number to array of chunk indices
   };
   
-  let chunkStartIndex = 0;
+  if (!chunks.length || !pages.length) {
+    return mapping;
+  }
   
-  pages.forEach((page, pageIndex) => {
-    const pageNumber = pageIndex + 1;
-    mapping.pageToChunks[pageNumber] = [];
-    
-    let pageTextIndex = 0;
-    const pageText = page.text;
-    
-    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-      const chunk = chunks[chunkIndex];
-      
-      // Check if this chunk starts within the current page text
-      const chunkStartsInPage = pageText.indexOf(chunk, pageTextIndex) !== -1;
-      
-      if (chunkStartsInPage) {
-        mapping.chunkToPage[chunkIndex] = pageNumber;
-        mapping.pageToChunks[pageNumber].push(chunkIndex);
-        pageTextIndex = pageText.indexOf(chunk, pageTextIndex) + chunk.length;
-      }
-      
-      // If we've processed all text in this page, move to next page
-      if (pageTextIndex >= pageText.length) {
-        break;
-      }
-    }
+  // Initialize page to chunks mapping
+  pages.forEach((_, pageIndex) => {
+    mapping.pageToChunks[pageIndex + 1] = [];
   });
   
-  // Ensure all chunks are assigned to a page (fallback)
-  chunks.forEach((_, chunkIndex) => {
-    if (!mapping.chunkToPage[chunkIndex]) {
-      const estimatedPage = Math.ceil((chunkIndex + 1) * pages.length / chunks.length);
-      const pageNumber = Math.min(estimatedPage, pages.length);
-      
-      mapping.chunkToPage[chunkIndex] = pageNumber;
-      mapping.pageToChunks[pageNumber] = mapping.pageToChunks[pageNumber] || [];
-      mapping.pageToChunks[pageNumber].push(chunkIndex);
-    }
+  // Simple mapping algorithm - estimate which chunks belong to which pages based on position
+  chunks.forEach((chunk, chunkIndex) => {
+    // Use relative position to assign chunks to pages
+    const relativePosition = chunkIndex / chunks.length;
+    const estimatedPageIndex = Math.floor(relativePosition * pages.length);
+    const pageNumber = estimatedPageIndex + 1;
+    
+    // Ensure page number is valid
+    const finalPageNumber = Math.max(1, Math.min(pageNumber, pages.length));
+    
+    mapping.chunkToPage[chunkIndex] = finalPageNumber;
+    mapping.pageToChunks[finalPageNumber].push(chunkIndex);
   });
   
   return mapping;
