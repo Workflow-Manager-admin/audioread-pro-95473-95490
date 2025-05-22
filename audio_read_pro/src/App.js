@@ -618,6 +618,56 @@ function App() {
       speak(textChunks[currentChunkIndex], { rate: newRate });
     }
   };
+  
+  // Handle word boundary events for auto-scrolling and highlighting
+  const handleWordBoundary = useCallback((wordData) => {
+    if (!wordData || !wordData.word) return;
+    
+    const { word, charIndex } = wordData;
+    
+    // Get the page offset for the current page
+    const pageStartPosition = docPages[currentPage - 1]?.startPosition || 0;
+    const relativeCharIndex = charIndex - pageStartPosition;
+    
+    // Find the word element based on the char index or word content
+    const wordKey = `word-${relativeCharIndex}-${word}`;
+    const alternateKey = Object.keys(wordElementsRef.current).find(key => 
+      key.includes(`-${word}`) && Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 50
+    );
+    
+    const wordElementId = wordElementsRef.current[wordKey] || 
+                        (alternateKey && wordElementsRef.current[alternateKey]) ||
+                        `word-${relativeCharIndex}`;
+    
+    const wordElement = document.getElementById(wordElementId);
+    
+    // Update current word ref and remove highlight from previous word
+    if (currentWordRef.current) {
+      const prevWordElement = document.getElementById(currentWordRef.current);
+      if (prevWordElement) {
+        prevWordElement.classList.remove('word-current');
+        prevWordElement.classList.add('word-spoken');
+      }
+    }
+    
+    // Set and highlight the new current word
+    if (wordElement) {
+      currentWordRef.current = wordElementId;
+      wordElement.classList.add('word-current');
+      
+      // Scroll the word into view if auto-scrolling is enabled
+      if (autoScrollingRef.current && documentContentRef.current) {
+        const docView = documentContentRef.current;
+        
+        // Scroll with smooth behavior to center the word in view
+        wordElement.scrollIntoView({
+          behavior: 'smooth', 
+          block: 'center',
+          inline: 'nearest'
+        });
+      }
+    }
+  }, [currentPage, docPages]);
 
   // Save bookmarks with current active document
   useEffect(() => {
