@@ -74,7 +74,7 @@ function App() {
     if (voices && voices.length > 0 && selectedVoiceIndex < voices.length) {
       setVoice(voices[selectedVoiceIndex]);
     }
-  }, [voices, selectedVoiceIndex, setVoice]);
+  }, [voices, selectedVoiceIndex]);  // Remove setVoice from dependencies
 
   // Handle play/pause button
   const handlePlayPause = () => {
