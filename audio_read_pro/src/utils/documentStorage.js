@@ -2,10 +2,13 @@
  * Document Storage Utility
  * 
  * Handles saving, retrieving, adding, and removing documents from localStorage
+ * Enhanced with support for pagination state and reading position tracking
  */
 
 const STORAGE_KEY = 'audioReadPro_documents';
 const ACTIVE_DOC_KEY = 'audioReadPro_activeDocument';
+const POSITION_KEY_PREFIX = 'audioReadProPosition_';
+const BOOKMARK_KEY_PREFIX = 'audioReadProBookmarks_';
 
 /**
  * Generate a unique ID for a document
@@ -98,6 +101,10 @@ export const removeDocument = (documentId) => {
       setActiveDocumentId(updatedDocuments[0]?.id || null);
     }
     
+    // Clean up any associated reading position and bookmarks
+    removeReadingPosition(documentId);
+    removeBookmarks(documentId);
+    
     return true;
   } catch (error) {
     console.error('Failed to remove document:', error);
@@ -169,4 +176,149 @@ export const getActiveDocument = () => {
  */
 export const hasDocuments = () => {
   return getDocuments().length > 0;
+};
+
+/**
+ * Save a reading position for a document
+ * @param {string} documentId - ID of the document
+ * @param {Object} positionData - Position data (page, chunk, position)
+ * @returns {boolean} Success status
+ */
+export const saveReadingPosition = (documentId, positionData) => {
+  try {
+    if (!documentId || !positionData) return false;
+    
+    const positionKey = `${POSITION_KEY_PREFIX}${documentId}`;
+    localStorage.setItem(positionKey, JSON.stringify({
+      ...positionData,
+      timestamp: new Date().toISOString()
+    }));
+    return true;
+  } catch (error) {
+    console.error('Failed to save reading position:', error);
+    return false;
+  }
+};
+
+/**
+ * Get the reading position for a document
+ * @param {string} documentId - ID of the document
+ * @returns {Object|null} Position data, or null if not found
+ */
+export const getReadingPosition = (documentId) => {
+  try {
+    if (!documentId) return null;
+    
+    const positionKey = `${POSITION_KEY_PREFIX}${documentId}`;
+    const positionData = localStorage.getItem(positionKey);
+    return positionData ? JSON.parse(positionData) : null;
+  } catch (error) {
+    console.error('Failed to get reading position:', error);
+    return null;
+  }
+};
+
+/**
+ * Remove the reading position for a document
+ * @param {string} documentId - ID of the document
+ * @returns {boolean} Success status
+ */
+export const removeReadingPosition = (documentId) => {
+  try {
+    if (!documentId) return false;
+    
+    const positionKey = `${POSITION_KEY_PREFIX}${documentId}`;
+    localStorage.removeItem(positionKey);
+    return true;
+  } catch (error) {
+    console.error('Failed to remove reading position:', error);
+    return false;
+  }
+};
+
+/**
+ * Save bookmarks for a document
+ * @param {string} documentId - ID of the document
+ * @param {Array} bookmarks - Array of bookmark objects
+ * @returns {boolean} Success status
+ */
+export const saveBookmarks = (documentId, bookmarks) => {
+  try {
+    if (!documentId || !bookmarks) return false;
+    
+    const bookmarkKey = `${BOOKMARK_KEY_PREFIX}${documentId}`;
+    localStorage.setItem(bookmarkKey, JSON.stringify(bookmarks));
+    return true;
+  } catch (error) {
+    console.error('Failed to save bookmarks:', error);
+    return false;
+  }
+};
+
+/**
+ * Get bookmarks for a document
+ * @param {string} documentId - ID of the document
+ * @returns {Array} Array of bookmark objects, or empty array if none found
+ */
+export const getBookmarks = (documentId) => {
+  try {
+    if (!documentId) return [];
+    
+    const bookmarkKey = `${BOOKMARK_KEY_PREFIX}${documentId}`;
+    const bookmarks = localStorage.getItem(bookmarkKey);
+    return bookmarks ? JSON.parse(bookmarks) : [];
+  } catch (error) {
+    console.error('Failed to get bookmarks:', error);
+    return [];
+  }
+};
+
+/**
+ * Remove bookmarks for a document
+ * @param {string} documentId - ID of the document
+ * @returns {boolean} Success status
+ */
+export const removeBookmarks = (documentId) => {
+  try {
+    if (!documentId) return false;
+    
+    const bookmarkKey = `${BOOKMARK_KEY_PREFIX}${documentId}`;
+    localStorage.removeItem(bookmarkKey);
+    return true;
+  } catch (error) {
+    console.error('Failed to remove bookmarks:', error);
+    return false;
+  }
+};
+
+/**
+ * Update the document metadata (like pageCount, etc.)
+ * @param {string} documentId - ID of the document to update
+ * @param {Object} metadata - New metadata to update
+ * @returns {Object|null} The updated document, or null if failed
+ */
+export const updateDocumentMetadata = (documentId, metadata) => {
+  try {
+    const documents = getDocuments();
+    const documentIndex = documents.findIndex(doc => doc.id === documentId);
+    
+    if (documentIndex === -1) return null;
+    
+    // Create an updated document with the new metadata
+    const updatedDocument = {
+      ...documents[documentIndex],
+      ...metadata,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Update the document in the array
+    documents[documentIndex] = updatedDocument;
+    
+    // Save the updated documents array
+    const success = saveDocuments(documents);
+    return success ? updatedDocument : null;
+  } catch (error) {
+    console.error('Failed to update document metadata:', error);
+    return null;
+  }
 };
