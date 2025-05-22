@@ -287,6 +287,32 @@ const useSpeechSynthesis = () => {
     }
   }
   
+  /**
+   * Register a callback to be notified when a new word is spoken
+   * @param {function} callback - Function to call when a new word boundary event occurs
+   * @returns {function} Function to unregister the callback
+   */
+  const registerWordBoundaryListener = useCallback((callback) => {
+    if (typeof callback !== 'function') return () => {};
+    
+    wordBoundaryListenersRef.current.push(callback);
+    
+    // Return a function to unregister this listener
+    return () => {
+      wordBoundaryListenersRef.current = wordBoundaryListenersRef.current.filter(
+        listener => listener !== callback
+      );
+    };
+  }, []);
+  
+  /**
+   * Get current word data
+   * @returns {Object} Current word data including the word and its position
+   */
+  const getCurrentWordData = useCallback(() => {
+    return currentWordDataRef.current;
+  }, []);
+
   return {
     speak,
     speaking,
@@ -300,7 +326,9 @@ const useSpeechSynthesis = () => {
     currentPosition: currentPositionRef.current,
     setPlaybackContext,
     getPlaybackContext,
-    lastWord: lastWordRef.current
+    lastWord: lastWordRef.current,
+    registerWordBoundaryListener,
+    getCurrentWordData
   };
 };
 
