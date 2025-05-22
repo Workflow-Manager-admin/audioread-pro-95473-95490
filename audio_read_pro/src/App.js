@@ -583,12 +583,12 @@ function App() {
           {activeDocument ? (
             <>
               <div className="document-content">
-                {renderTextWithClickableWords(documentText)}
+                {renderTextWithClickableWords(currentPageText || documentText)}
               </div>
               <div className="page-navigation">
                 <button 
                   className="btn" 
-                  onClick={() => setDisplayPage(prev => Math.max(1, prev - 1))}
+                  onClick={() => handlePageChange(Math.max(1, displayPage - 1))}
                   disabled={displayPage === 1}
                 >
                   Previous Page
@@ -596,7 +596,7 @@ function App() {
                 <span>Page {displayPage} of {totalPages}</span>
                 <button 
                   className="btn" 
-                  onClick={() => setDisplayPage(prev => Math.min(totalPages, prev + 1))}
+                  onClick={() => handlePageChange(Math.min(totalPages, displayPage + 1))}
                   disabled={displayPage === totalPages}
                 >
                   Next Page
