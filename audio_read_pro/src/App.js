@@ -485,12 +485,15 @@ function App() {
     saveReadingPosition();
   };
 
-  // Render text with clickable words - updated to use enhanced page information
+  // Render text with clickable words - updated to use enhanced page information and IDs for tracking
   const renderTextWithClickableWords = () => {
     if (!currentPageText) return null;
     
     // Get the current page's starting position in the full document
     const pageStartPosition = docPages[currentPage - 1]?.startPosition || 0;
+    
+    // Reset word elements mapping for this page
+    wordElementsRef.current = {};
     
     // Split text into paragraphs
     const paragraphs = currentPageText.split('\n');
@@ -515,12 +518,22 @@ function App() {
             
             // Only make actual words clickable (not spaces, punctuation)
             if (/\w+/.test(word)) {
+              // Create a unique ID for this word
+              const wordId = `word-${currentOffset - pageStartPosition}-${word}`;
+              
+              // Store the mapping between char position and word element ID
+              const relativeCharIndex = currentOffset - pageStartPosition;
+              wordElementsRef.current[`word-${relativeCharIndex}-${word}`] = wordId;
+              
               return (
                 <span 
+                  id={wordId}
                   key={`word-${paraIndex}-${wordIndex}`}
                   className="clickable-word"
                   onClick={() => handleWordClick(word, wordIndex, currentOffset)}
                   style={{ cursor: 'pointer' }}
+                  data-offset={currentOffset}
+                  data-word={word}
                 >
                   {word}
                 </span>
@@ -765,7 +778,10 @@ function App() {
         <div className="document-view">
           {activeDocument ? (
             <>
-              <div className="document-content">
+              <div 
+                ref={documentContentRef} 
+                className={`document-content ${speaking ? 'auto-scrolling' : ''}`}
+              >
                 {renderTextWithClickableWords()}
               </div>
               <div className="page-navigation">
