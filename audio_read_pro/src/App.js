@@ -18,7 +18,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState(null);
 
-  const { speak, cancel, speaking, supported, voices } = useSpeechSynthesis();
+  const { speak, speaking, voices, cancel } = useSpeechSynthesis();
 
   const onDrop = useCallback(async (acceptedFiles) => {
     try {
@@ -54,11 +54,21 @@ function App() {
       cancel();
       setIsPlaying(false);
     } else if (textChunks.length > 0) {
-      speak({
-        text: textChunks[currentChunkIndex],
-        rate: playbackRate,
-        voice: voices.find(v => v.default)
-      });
+      const utterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex]);
+      utterance.rate = playbackRate;
+      utterance.voice = voices.find(v => v.default) || null;
+      utterance.onend = () => {
+        if (currentChunkIndex < textChunks.length - 1) {
+          setCurrentChunkIndex(prev => prev + 1);
+          const nextUtterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex + 1]);
+          nextUtterance.rate = playbackRate;
+          nextUtterance.voice = voices.find(v => v.default) || null;
+          speak(nextUtterance);
+        } else {
+          setIsPlaying(false);
+        }
+      };
+      speak(utterance);
       setIsPlaying(true);
     }
   };
@@ -68,11 +78,10 @@ function App() {
       setCurrentChunkIndex(prev => prev + 1);
       if (speaking) {
         cancel();
-        speak({
-          text: textChunks[currentChunkIndex + 1],
-          rate: playbackRate,
-          voice: voices.find(v => v.default)
-        });
+        const utterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex + 1]);
+        utterance.rate = playbackRate;
+        utterance.voice = voices.find(v => v.default) || null;
+        speak(utterance);
       }
     }
   };
@@ -82,11 +91,10 @@ function App() {
       setCurrentChunkIndex(prev => prev - 1);
       if (speaking) {
         cancel();
-        speak({
-          text: textChunks[currentChunkIndex - 1],
-          rate: playbackRate,
-          voice: voices.find(v => v.default)
-        });
+        const utterance = new SpeechSynthesisUtterance(textChunks[currentChunkIndex - 1]);
+        utterance.rate = playbackRate;
+        utterance.voice = voices.find(v => v.default) || null;
+        speak(utterance);
       }
     }
   };
@@ -105,11 +113,10 @@ function App() {
     setCurrentChunkIndex(bookmark.chunk);
     if (speaking) {
       cancel();
-      speak({
-        text: textChunks[bookmark.chunk],
-        rate: playbackRate,
-        voice: voices.find(v => v.default)
-      });
+      const utterance = new SpeechSynthesisUtterance(textChunks[bookmark.chunk]);
+      utterance.rate = playbackRate;
+      utterance.voice = voices.find(v => v.default) || null;
+      speak(utterance);
     }
   };
 
@@ -135,7 +142,16 @@ function App() {
     }
   }, []);
 
-  if (!supported) {
+  // Cleanup speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if (speaking) {
+        cancel();
+      }
+    };
+  }, [speaking, cancel]);
+
+  if (!window.speechSynthesis) {
     return <div className="error-message">Text-to-speech is not supported in your browser.</div>;
   }
 
@@ -204,7 +220,11 @@ function App() {
               <h3>Voice Settings</h3>
               <select 
                 className="select-control"
-                onChange={(e) => speak({ text: '', voice: voices[e.target.value] })}
+                onChange={(e) => {
+                  const utterance = new SpeechSynthesisUtterance('');
+                  utterance.voice = voices[e.target.value];
+                  speak(utterance);
+                }}
               >
                 {voices.map((voice, index) => (
                   <option key={index} value={index}>
