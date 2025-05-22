@@ -1,7 +1,7 @@
 import { pdfjs } from 'react-pdf';
 import mammoth from 'mammoth';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// PDF.js worker initialization is now handled in App.js
 
 export const extractTextFromPDF = async (file) => {
   try {
