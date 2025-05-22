@@ -1,4 +1,4 @@
-c/**
+/**
  * Sample Document Utility
  * 
  * Provides a default sample document when the app is first loaded

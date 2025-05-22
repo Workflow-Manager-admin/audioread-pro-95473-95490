@@ -317,7 +317,7 @@ function App() {
     <div className="app">
       <div className="container">
         <div className="document-view">
-          {document ? (
+          {activeDocument ? (
             <>
               <div className="document-content">
                 {renderTextWithClickableWords(documentText)}
@@ -342,10 +342,7 @@ function App() {
             </>
           ) : (
             <div className="document-placeholder">
-              <div {...getRootProps()} className="upload-zone">
-                <input {...getInputProps()} />
-                <p>Drag & drop a PDF, DOCX, or TXT file here, or click to select one</p>
-              </div>
+              <p>Select a document from your library or add a new one to get started</p>
             </div>
           )}
         </div>
