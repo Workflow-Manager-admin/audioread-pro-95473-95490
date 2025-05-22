@@ -18,7 +18,8 @@
 .container {
   display: flex;
   flex: 1;
-  height: calc(100vh - 60px);
+  height: calc(100vh - var(--controls-bar-height));
+  margin-bottom: var(--controls-bar-height);
 }
 
 .document-view {
