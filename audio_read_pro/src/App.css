@@ -5,6 +5,8 @@
   --background-color: #ffffff;
   --text-color: #333333;
   --border-color: #e0e0e0;
+  --controls-bar-height: 80px;
+  --controls-bar-background: rgba(255, 255, 255, 0.95);
 }
 
 .app {
