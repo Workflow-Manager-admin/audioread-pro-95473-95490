@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 
 /**
  * Custom hook for using the Web Speech API for speech synthesis
- * Enhanced with pause/resume and voice switching capabilities
- * Improved word position tracking for better playback resumption
+ * Enhanced with pause/resume, voice switching capabilities, and improved word position tracking
  */
 const useSpeechSynthesis = () => {
   const [voices, setVoices] = useState([]);
