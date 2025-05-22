@@ -278,10 +278,14 @@ function App() {
     }
   };
 
+  // Save bookmarks with current active document
   useEffect(() => {
-    // Save bookmarks to localStorage
-    localStorage.setItem('audioReadProBookmarks', JSON.stringify(bookmarks));
-  }, [bookmarks]);
+    if (!activeDocument) return;
+    
+    // Store bookmarks with the document ID
+    const bookmarkKey = `audioReadProBookmarks_${activeDocument.id}`;
+    localStorage.setItem(bookmarkKey, JSON.stringify(bookmarks));
+  }, [bookmarks, activeDocument]);
 
   // Synchronize page navigation with text chunks
   useEffect(() => {
@@ -292,13 +296,21 @@ function App() {
     }
   }, [currentChunkIndex, textChunks.length, totalPages]);
 
+  // Load bookmarks for current active document
   useEffect(() => {
-    // Load bookmarks from localStorage
-    const savedBookmarks = localStorage.getItem('audioReadProBookmarks');
+    if (!activeDocument) {
+      setBookmarks([]);
+      return;
+    }
+    
+    const bookmarkKey = `audioReadProBookmarks_${activeDocument.id}`;
+    const savedBookmarks = localStorage.getItem(bookmarkKey);
     if (savedBookmarks) {
       setBookmarks(JSON.parse(savedBookmarks));
+    } else {
+      setBookmarks([]);
     }
-  }, []);
+  }, [activeDocument]);
 
   // Cleanup speech synthesis on unmount
   useEffect(() => {
@@ -357,6 +369,12 @@ function App() {
             onSelectDocument={handleSelectDocument}
             loading={loadingDocuments}
           />
+          
+          {loadingDocuments && (
+            <div className="loading-indicator">
+              <p>Loading documents...</p>
+            </div>
+          )}
           
           <div className="controls-section">
             <h3>Playback Controls</h3>
