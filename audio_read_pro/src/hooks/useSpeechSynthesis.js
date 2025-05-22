@@ -216,12 +216,30 @@ const useSpeechSynthesis = () => {
         volume: utteranceRef.current.volume
       };
       
-      // Small delay to ensure clean transition
-      setTimeout(() => {
-        speakFromPosition(currentPosition, options);
-      }, 50);
+      // Cancel the current speech and start with new voice
+      window.speechSynthesis.cancel();
+      
+      // Create utterance directly to avoid dependency issues
+      const remainingText = currentTextRef.current.substring(currentPosition);
+      const utterance = new SpeechSynthesisUtterance(remainingText);
+      
+      // Apply the new voice
+      utterance.voice = voice;
+      
+      // Apply other options
+      Object.keys(options).forEach(option => {
+        if (option in utterance) {
+          utterance[option] = options[option];
+        }
+      });
+      
+      // Store reference and update state
+      utteranceRef.current = utterance;
+      
+      // Speak with new voice
+      window.speechSynthesis.speak(utterance);
     }
-  }, [speaking, speakFromPosition]);
+  }, [speaking]);
   
   return {
     speak,
