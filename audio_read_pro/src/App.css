@@ -1,18 +1,10 @@
 :root {
-  --kavia-orange: #E87A41;
-  --kavia-dark: #1A1A1A;
-  --text-color: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.1);
-}
-
-body {
-  margin: 0;
-  font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-  background-color: var(--kavia-dark);
-  color: var(--text-color);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --primary-color: #0066cc;
+  --secondary-color: #00cc66;
+  --accent-color: #ffcc00;
+  --background-color: #ffffff;
+  --text-color: #333333;
+  --border-color: #e0e0e0;
 }
 
 .app {
@@ -21,88 +13,142 @@ body {
   flex-direction: column;
 }
 
-.navbar {
-  background-color: var(--kavia-dark);
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border-color);
-  position: fixed;
-  top: 0;
-  width: 100%;
-  box-sizing: border-box;
-  z-index: 100;
-}
-
-.logo {
-  font-size: 1.25rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logo-symbol {
-  color: var(--kavia-orange);
-}
-
 .container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 24px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.hero {
-  padding-top: 120px;
-  padding-bottom: 64px;
-  text-align: center;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
+  flex: 1;
+  height: calc(100vh - 60px);
 }
 
-.subtitle {
-  color: var(--kavia-orange);
-  font-weight: 500;
-  font-size: 1.1rem;
+.document-view {
+  flex: 1;
+  border-right: 1px solid var(--border-color);
+  padding: 20px;
+  overflow-y: auto;
 }
 
-.title {
-  font-size: 3.5rem;
-  font-weight: 600;
-  line-height: 1.2;
-  margin: 0;
+.controls-panel {
+  width: 400px;
+  padding: 20px;
+  background-color: #f8f9fa;
 }
 
-.description {
-  font-size: 1.1rem;
-  line-height: 1.5;
-  color: var(--text-secondary);
-  max-width: 600px;
-  margin-bottom: 16px;
+.upload-zone {
+  border: 2px dashed var(--primary-color);
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: border-color 0.3s ease;
+}
+
+.upload-zone:hover {
+  border-color: var(--secondary-color);
+}
+
+.controls-section {
+  margin-bottom: 24px;
+}
+
+.controls-section h3 {
+  color: var(--primary-color);
+  margin-bottom: 12px;
+}
+
+.playback-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
 .btn {
-  background-color: var(--kavia-orange);
+  background-color: var(--primary-color);
   color: white;
   border: none;
   border-radius: 4px;
   padding: 10px 20px;
   font-size: 1rem;
-  font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
 
 .btn:hover {
-  background-color: #FF8B4D;
+  background-color: #0052a3;
 }
 
-.btn-large {
-  padding: 12px 24px;
-  font-size: 1.1rem;
+.btn-secondary {
+  background-color: var(--secondary-color);
+}
+
+.btn-secondary:hover {
+  background-color: #00a352;
+}
+
+.select-control {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.speed-control {
+  width: 100%;
+  margin: 10px 0;
+}
+
+.document-placeholder {
+  text-align: center;
+  color: #666;
+  margin-top: 40px;
+}
+
+.document-content {
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.page-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.bookmark-list {
+  margin-top: 20px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 20px;
+}
+
+.bookmark-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.bookmark-item:hover {
+  background-color: #f0f0f0;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.error-message {
+  color: #dc3545;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid #dc3545;
+  border-radius: 4px;
+  background-color: #fff;
 }
