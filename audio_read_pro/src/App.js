@@ -51,12 +51,73 @@ function App() {
     setActiveDocumentById
   } = useDocumentLibrary();
 
+  // Handle document selection
+  const handleSelectDocument = (documentId) => {
+    // First, cancel any ongoing speech
+    if (speaking) {
+      cancel();
+    }
+    setIsPlaying(false);
+    
+    // Set the new active document
+    const selectedDoc = setActiveDocumentById(documentId);
+    
+    if (selectedDoc) {
+      // Update the document text and related state variables
+      setDocumentText(selectedDoc.text);
+      setTotalPages(selectedDoc.pageCount || 1);
+      setCurrentPage(1);
+      setDisplayPage(1);
+      
+      // Use the pre-processed text chunks if available, or generate them
+      const chunks = selectedDoc.textChunks || splitTextIntoChunks(selectedDoc.text);
+      setTextChunks(chunks);
+      setCurrentChunkIndex(0);
+      setError(null);
+    }
+  };
+  
+  // Handle adding new documents
+  const handleAddDocument = async (acceptedFiles) => {
+    try {
+      if (!acceptedFiles || acceptedFiles.length === 0) return;
+      
+      const file = acceptedFiles[0];
+      const newDoc = await addNewDocument(file);
+      
+      // Switch to the newly added document
+      handleSelectDocument(newDoc.id);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  
+  // Handle removing documents
+  const handleRemoveDocument = (documentId) => {
+    removeDocumentFromLibrary(documentId);
+  };
+    
   // Effect to update the selected voice when voices are loaded
   useEffect(() => {
     if (voices && voices.length > 0 && selectedVoiceIndex < voices.length) {
       setVoice(voices[selectedVoiceIndex]);
     }
-  }, [voices, selectedVoiceIndex]);  // Remove setVoice from dependencies
+  }, [voices, selectedVoiceIndex, setVoice]);
+  
+  // Effect to update content when active document changes
+  useEffect(() => {
+    if (activeDocument) {
+      setDocumentText(activeDocument.text);
+      setTotalPages(activeDocument.pageCount || 1);
+      setCurrentPage(1);
+      setDisplayPage(1);
+      
+      // Use the pre-processed text chunks if available, or generate them
+      const chunks = activeDocument.textChunks || splitTextIntoChunks(activeDocument.text);
+      setTextChunks(chunks);
+      setCurrentChunkIndex(0);
+    }
+  }, [activeDocument]);
 
   // Handle play/pause button
   const handlePlayPause = () => {
