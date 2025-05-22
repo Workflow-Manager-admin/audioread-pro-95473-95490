@@ -7,65 +7,76 @@ import { useState, useEffect, useCallback } from 'react';
 const useSpeechSynthesis = () => {
   const [voices, setVoices] = useState([]);
   const [speaking, setSpeaking] = useState(false);
-  const [supported, setSupported] = useState(false);
   
+  // Get available voices and update when the list changes
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      setSupported(true);
-      
-      // Get initial list of voices
-      const getVoices = () => {
-        const voiceOptions = window.speechSynthesis.getVoices();
-        setVoices(voiceOptions);
-      };
-      
-      getVoices();
-      
-      // Chrome loads voices asynchronously
-      window.speechSynthesis.onvoiceschanged = getVoices;
-      
-      return () => {
-        window.speechSynthesis.onvoiceschanged = null;
-      };
-    }
-  }, []);
-  
-  const speak = useCallback((utterance) => {
-    if (!supported) return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
-    setSpeaking(true);
-    
-    const handleEnd = () => {
-      setSpeaking(false);
-      if (utterance.onend && typeof utterance.onend === 'function') {
-        utterance.onend();
-      }
+    // Function to get and set voices
+    const getVoices = () => {
+      const voiceOptions = window.speechSynthesis.getVoices();
+      setVoices(voiceOptions);
     };
     
-    // If a SpeechSynthesisUtterance is not provided, create one
+    // Get initial list of voices
+    getVoices();
+    
+    // Chrome and some browsers load voices asynchronously
+    window.speechSynthesis.onvoiceschanged = getVoices;
+    
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+  
+  // Clean up on unmount - cancel any ongoing speech
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis && speaking) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [speaking]);
+  
+  // Function to speak text
+  const speak = useCallback((utterance) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    
     const utteranceToSpeak = 
       utterance instanceof SpeechSynthesisUtterance
         ? utterance
         : new SpeechSynthesisUtterance(utterance);
     
-    // Keep track of original onend and add our state handling
+    // Store original onend and add our state handling
     const originalOnEnd = utteranceToSpeak.onend;
+    
     utteranceToSpeak.onend = (event) => {
-      handleEnd();
-      if (originalOnEnd) originalOnEnd(event);
+      setSpeaking(false);
+      if (typeof originalOnEnd === 'function') {
+        originalOnEnd(event);
+      }
     };
     
+    // Handle errors
+    utteranceToSpeak.onerror = () => {
+      setSpeaking(false);
+    };
+    
+    setSpeaking(true);
     window.speechSynthesis.speak(utteranceToSpeak);
-  }, [supported]);
+  }, []);
   
+  // Function to cancel speech
   const cancel = useCallback(() => {
-    if (!supported) return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    
     setSpeaking(false);
     window.speechSynthesis.cancel();
-  }, [supported]);
+  }, []);
   
   return {
-    supported,
     speak,
     speaking,
     cancel,
