@@ -291,7 +291,7 @@ function App() {
     }
   };
 
-  // Handle word click to start speaking from that position
+  // Handle word click to start speaking from that position with enhanced state management
   const handleWordClick = (word, wordIndex, totalOffset) => {
     // Find the character position of this word in the full text
     const charPosition = totalOffset;
@@ -315,10 +315,38 @@ function App() {
     // Get the relative position within the chunk
     const relativePosition = charPosition - chunkStart;
     
+    // Update page if needed
+    if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[chunkIndex]) {
+      const pageForChunk = chunkToPageMapping.chunkToPage[chunkIndex];
+      if (pageForChunk !== displayPage) {
+        setDisplayPage(pageForChunk);
+        setCurrentPage(pageForChunk);
+        
+        // Update current page text
+        if (docPages[pageForChunk - 1]) {
+          setCurrentPageText(docPages[pageForChunk - 1].text);
+        }
+      }
+    }
+    
     // Speak from this position
     if (speaking) {
       cancel();
     }
+    
+    // Update playback context
+    setPlaybackContext({
+      chunkIndex,
+      pageIndex: displayPage - 1,
+      wordIndex: relativePosition
+    });
+    
+    // Update position tracking
+    lastPositionRef.current = {
+      page: displayPage,
+      chunk: chunkIndex,
+      position: relativePosition
+    };
     
     speakFromPosition(relativePosition, { rate: playbackRate });
     setIsPlaying(true);
