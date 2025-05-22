@@ -22,7 +22,8 @@ const useDocumentLibrary = () => {
 
   // Load documents from localStorage on mount
   useEffect(() => {
-    const initializeDocuments = async () => {
+    // Using a non-async function for the effect to avoid potential issues
+    const initializeDocuments = () => {
       try {
         setLoading(true);
         // Get documents from localStorage
@@ -62,6 +63,7 @@ const useDocumentLibrary = () => {
       }
     };
     
+    // Execute the initialization
     initializeDocuments();
   }, []);
 
