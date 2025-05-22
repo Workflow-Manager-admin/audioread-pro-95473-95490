@@ -142,6 +142,35 @@ const useSpeechSynthesis = () => {
             
             // Update word index in context
             playbackContextRef.current.wordIndex = event.charIndex;
+            
+            // Update current word data with timing information
+            currentWordDataRef.current = {
+              word: currentWord,
+              charIndex: event.charIndex,
+              startTime: performance.now()
+            };
+            
+            // Notify all registered word boundary listeners
+            if (wordBoundaryListenersRef.current.length > 0) {
+              const wordData = {
+                word: currentWord,
+                charIndex: event.charIndex,
+                wordPosition: {
+                  start: wordStart,
+                  end: wordEnd
+                },
+                text: text,
+                timestamp: performance.now()
+              };
+              
+              wordBoundaryListenersRef.current.forEach(listener => {
+                try {
+                  listener(wordData);
+                } catch (error) {
+                  console.error('Error in word boundary listener:', error);
+                }
+              });
+            }
           }
         }
       }
