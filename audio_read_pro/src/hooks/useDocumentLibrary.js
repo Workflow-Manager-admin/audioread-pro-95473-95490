@@ -8,7 +8,7 @@ import {
   hasDocuments
 } from '../utils/documentStorage';
 import { getSampleDocument } from '../utils/sampleDocument';
-import { processDocument, splitTextIntoChunks } from '../utils/documentUtils';
+import { processDocument } from '../utils/documentUtils';
 
 /**
  * Custom hook to manage the document library
@@ -56,6 +56,7 @@ const useDocumentLibrary = () => {
           }
         }
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('Error initializing documents:', err);
         setError('Failed to load documents');
       } finally {
@@ -99,6 +100,7 @@ const useDocumentLibrary = () => {
         throw new Error('Failed to add document to storage');
       }
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error('Error adding document:', err);
       setError(`Failed to add document: ${err.message}`);
       throw err;
@@ -137,6 +139,7 @@ const useDocumentLibrary = () => {
       
       return success;
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error('Error removing document:', err);
       setError(`Failed to remove document: ${err.message}`);
       return false;
@@ -168,6 +171,7 @@ const useDocumentLibrary = () => {
       
       return document;
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error('Error setting active document:', err);
       setError(`Failed to set active document: ${err.message}`);
       return null;
