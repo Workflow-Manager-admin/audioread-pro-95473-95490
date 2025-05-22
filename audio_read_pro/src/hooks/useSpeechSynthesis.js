@@ -188,7 +188,36 @@ const useSpeechSynthesis = () => {
     // Update position tracking
     currentPositionRef.current = charIndex;
     
+    // Update context with the new position
+    playbackContextRef.current.wordIndex = charIndex;
+    
     speak(utterance);
+  }
+  
+  /**
+   * Set the current playback context (page and chunk information)
+   * @param {Object} context - Context object with page and chunk information
+   */
+  function setPlaybackContext(context = {}) {
+    if (context.chunkIndex !== undefined) {
+      playbackContextRef.current.chunkIndex = context.chunkIndex;
+    }
+    
+    if (context.pageIndex !== undefined) {
+      playbackContextRef.current.pageIndex = context.pageIndex;
+    }
+  }
+  
+  /**
+   * Get the current playback context
+   * @returns {Object} Current playback context
+   */
+  function getPlaybackContext() {
+    return {
+      ...playbackContextRef.current,
+      currentPosition: currentPositionRef.current,
+      lastWord: lastWordRef.current
+    };
   }
   
   // Function to change the voice for speech synthesis
@@ -233,7 +262,10 @@ const useSpeechSynthesis = () => {
     voices,
     setVoice,
     speakFromPosition,
-    currentPosition: currentPositionRef.current
+    currentPosition: currentPositionRef.current,
+    setPlaybackContext,
+    getPlaybackContext,
+    lastWord: lastWordRef.current
   };
 };
 
