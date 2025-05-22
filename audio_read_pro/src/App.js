@@ -118,6 +118,15 @@ function App() {
     localStorage.setItem('audioReadProBookmarks', JSON.stringify(bookmarks));
   }, [bookmarks]);
 
+  // Synchronize page navigation with text chunks
+  useEffect(() => {
+    if (textChunks.length > 0) {
+      const estimatedChunksPerPage = Math.ceil(textChunks.length / totalPages);
+      const currentEstimatedPage = Math.ceil((currentChunkIndex + 1) / estimatedChunksPerPage);
+      setDisplayPage(currentEstimatedPage);
+    }
+  }, [currentChunkIndex, textChunks.length, totalPages]);
+
   useEffect(() => {
     // Load bookmarks from localStorage
     const savedBookmarks = localStorage.getItem('audioReadProBookmarks');
