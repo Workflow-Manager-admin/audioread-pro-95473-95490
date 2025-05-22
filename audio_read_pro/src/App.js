@@ -163,19 +163,46 @@ function App() {
     }
   }, [activeDocument]);
 
-  // Handle play/pause button
+  // Handle play/pause button with enhanced position tracking
   const handlePlayPause = () => {
     if (speaking) {
       if (paused) {
+        // Resume from the current position
         resume();
+        setIsPlaying(true);
       } else {
+        // Save current position when pausing
+        const context = getPlaybackContext();
+        lastPositionRef.current = {
+          page: displayPage,
+          chunk: currentChunkIndex,
+          position: context.wordIndex
+        };
         pause();
+        setIsPlaying(false);
       }
     } else if (textChunks.length > 0) {
-      speak(textChunks[currentChunkIndex], { rate: playbackRate });
+      // If we have a saved position, try to resume from there
+      if (lastPositionRef.current.position > 0 && currentChunkIndex === lastPositionRef.current.chunk) {
+        speakFromPosition(lastPositionRef.current.position, { rate: playbackRate });
+        
+        // Update playback context
+        setPlaybackContext({
+          chunkIndex: currentChunkIndex,
+          pageIndex: displayPage - 1
+        });
+      } else {
+        // Otherwise start from the beginning of the current chunk
+        speak(textChunks[currentChunkIndex], { rate: playbackRate });
+        
+        // Update playback context
+        setPlaybackContext({
+          chunkIndex: currentChunkIndex,
+          pageIndex: displayPage - 1
+        });
+      }
       setIsPlaying(true);
     }
-    setIsPlaying(!paused);
   };
 
   // Handle next chunk
