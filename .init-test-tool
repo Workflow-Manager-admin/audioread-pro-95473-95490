@@ -1,0 +1,4 @@
+{
+    "command": "npm run test",
+    "working_directory": "/home/kavia/workspace/code-generation/audioread-pro-95473-95490/audio_read_pro"
+}
