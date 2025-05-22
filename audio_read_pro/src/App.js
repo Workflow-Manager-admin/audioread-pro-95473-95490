@@ -10,6 +10,7 @@ function App() {
   const [documentText, setDocumentText] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [displayPage, setDisplayPage] = useState(1);
   const [textChunks, setTextChunks] = useState([]);
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [bookmarks, setBookmarks] = useState([]);
@@ -134,11 +135,30 @@ function App() {
       <div className="container">
         <div className="document-view">
           {document ? (
-            <div className="document-content">
-              {documentText.split('\n').map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
+            <>
+              <div className="document-content">
+                {documentText.split('\n').map((paragraph, index) => (
+                  <p key={index}>{paragraph}</p>
+                ))}
+              </div>
+              <div className="page-navigation">
+                <button 
+                  className="btn" 
+                  onClick={() => setDisplayPage(prev => Math.max(1, prev - 1))}
+                  disabled={displayPage === 1}
+                >
+                  Previous Page
+                </button>
+                <span>Page {displayPage} of {totalPages}</span>
+                <button 
+                  className="btn" 
+                  onClick={() => setDisplayPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={displayPage === totalPages}
+                >
+                  Next Page
+                </button>
+              </div>
+            </>
           ) : (
             <div className="document-placeholder">
               <div {...getRootProps()} className="upload-zone">
