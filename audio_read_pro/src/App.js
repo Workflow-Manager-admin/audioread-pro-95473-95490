@@ -4,7 +4,7 @@ import useDocumentLibrary from './hooks/useDocumentLibrary';
 import DocumentLibrary from './components/DocumentLibrary';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
 import { pdfjs } from 'react-pdf';
-import { splitTextIntoChunks } from './utils/documentUtils';
+import { splitTextIntoChunks, splitTextIntoPages, mapChunksToPages } from './utils/documentUtils';
 import './App.css';
 
 // Initialize PDF.js worker
@@ -25,8 +25,14 @@ function App() {
   const [error, setError] = useState(null);
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(0);
   
-  // Create a ref to store word positions in the document
+  // Enhanced page navigation state
+  const [docPages, setDocPages] = useState([]);
+  const [currentPageText, setCurrentPageText] = useState('');
+  const [chunkToPageMapping, setChunkToPageMapping] = useState({});
+  
+  // Create refs to store context between renders
   const wordPositionsRef = useRef([]);
+  const lastPositionRef = useRef({ page: 1, chunk: 0, position: 0 });
 
   // Use our custom hooks for speech synthesis and document management
   const { 
