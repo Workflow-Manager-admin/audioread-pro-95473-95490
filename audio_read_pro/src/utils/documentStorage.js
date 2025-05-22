@@ -64,11 +64,8 @@ export const addDocument = (documentData) => {
       return null;
     }
     
-    // Make sure textChunks is an array
-    if (!Array.isArray(newDocument.textChunks)) {
-      newDocument.textChunks = newDocument.text ? 
-        newDocument.text.split(/(?<=\.)\s+/) : [];
-    }
+    // Remove textChunks as they'll be generated on demand
+    delete newDocument.textChunks;
     
     documents.push(newDocument);
     const success = saveDocuments(documents);
