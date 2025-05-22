@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 /**
  * Custom hook for using the Web Speech API for speech synthesis
@@ -52,13 +52,8 @@ const useSpeechSynthesis = () => {
     };
   }, []);
   
-  /**
-   * Creates an utterance with the specified text and settings
-   * @param {string} text - The text to speak
-   * @param {object} options - Configuration options like rate, pitch, etc.
-   * @returns {SpeechSynthesisUtterance} - The configured utterance
-   */
-  const createUtterance = useCallback((text, options = {}) => {
+  // Helper function to configure an utterance (not exposed as a callback to avoid circular dependencies)
+  function configureUtterance(text, options = {}) {
     const utterance = new SpeechSynthesisUtterance(text);
     
     // Apply voice
@@ -74,14 +69,10 @@ const useSpeechSynthesis = () => {
     });
     
     return utterance;
-  }, []);
+  }
   
-  /**
-   * Function to speak text
-   * @param {string|SpeechSynthesisUtterance} input - Text to speak or utterance object
-   * @param {object} options - Options like rate, pitch, etc.
-   */
-  const speak = useCallback((input, options = {}) => {
+  // Function to speak text (defined outside useCallback to avoid circular dependencies)
+  function speak(input, options = {}) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
     // Cancel any ongoing speech
@@ -92,7 +83,7 @@ const useSpeechSynthesis = () => {
       utteranceToSpeak = input;
       currentTextRef.current = utteranceToSpeak.text;
     } else {
-      utteranceToSpeak = createUtterance(input, options);
+      utteranceToSpeak = configureUtterance(input, options);
       currentTextRef.current = input;
     }
     
@@ -132,77 +123,52 @@ const useSpeechSynthesis = () => {
     setSpeaking(true);
     setPaused(false);
     window.speechSynthesis.speak(utteranceToSpeak);
-  }, [createUtterance]);
+  }
   
-  /**
-   * Function to pause speech
-   */
-  const pause = useCallback(() => {
+  // Function to pause speech
+  function pause() {
     if (typeof window === 'undefined' || !window.speechSynthesis || !speaking) return;
     
     window.speechSynthesis.pause();
     setPaused(true);
-  }, [speaking]);
+  }
   
-  /**
-   * Function to resume speech from where it was paused
-   */
-  const resume = useCallback(() => {
+  // Function to resume speech from where it was paused
+  function resume() {
     if (typeof window === 'undefined' || !window.speechSynthesis || !paused) return;
     
     window.speechSynthesis.resume();
     setPaused(false);
-  }, [paused]);
+  }
   
-  /**
-   * Function to cancel speech
-   */
-  const cancel = useCallback(() => {
+  // Function to cancel speech
+  function cancel() {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
     window.speechSynthesis.cancel();
     utteranceRef.current = null;
     setSpeaking(false);
     setPaused(false);
-  }, []);
+  }
   
-  /**
-   * Function to continue speaking from a specific position in the current text
-   * @param {number} charIndex - Character index to start from
-   * @param {object} options - Options like rate, pitch, etc.
-   */
-  const speakFromPosition = useCallback((charIndex, options = {}) => {
+  // Function to continue speaking from a specific position in the current text
+  function speakFromPosition(charIndex, options = {}) {
     if (!currentTextRef.current || typeof charIndex !== 'number') return;
     
     // Create a new utterance starting from the specified position
     const remainingText = currentTextRef.current.substring(charIndex);
     
-    // Create utterance directly instead of using createUtterance to avoid circular dependency
-    const utterance = new SpeechSynthesisUtterance(remainingText);
-    
-    // Apply voice
-    if (selectedVoiceRef.current) {
-      utterance.voice = selectedVoiceRef.current;
-    }
-    
-    // Apply options (rate, pitch, etc.)
-    Object.keys(options).forEach(option => {
-      if (option in utterance) {
-        utterance[option] = options[option];
-      }
-    });
+    // Create and configure utterance
+    const utterance = configureUtterance(remainingText, options);
     
     // Update position tracking
     currentPositionRef.current = charIndex;
     
     speak(utterance);
-  }, [speak]);
+  }
   
-  /**
-   * Function to change the voice for speech synthesis
-   * @param {SpeechSynthesisVoice} voice - The voice to use
-   */
-  const setVoice = useCallback((voice) => {
+  // Function to change the voice for speech synthesis
+  function setVoice(voice) {
     if (!voice) return;
     
     selectedVoiceRef.current = voice;
@@ -216,30 +182,22 @@ const useSpeechSynthesis = () => {
         volume: utteranceRef.current.volume
       };
       
-      // Cancel the current speech and start with new voice
+      // Cancel the current speech
       window.speechSynthesis.cancel();
       
-      // Create utterance directly to avoid dependency issues
+      // Get the remaining text
       const remainingText = currentTextRef.current.substring(currentPosition);
-      const utterance = new SpeechSynthesisUtterance(remainingText);
       
-      // Apply the new voice
-      utterance.voice = voice;
-      
-      // Apply other options
-      Object.keys(options).forEach(option => {
-        if (option in utterance) {
-          utterance[option] = options[option];
-        }
-      });
+      // Create a new utterance with the new voice
+      const utterance = configureUtterance(remainingText, options);
       
       // Store reference and update state
       utteranceRef.current = utterance;
       
-      // Speak with new voice
+      // Speak with the new voice
       window.speechSynthesis.speak(utterance);
     }
-  }, [speaking]);
+  }
   
   return {
     speak,
