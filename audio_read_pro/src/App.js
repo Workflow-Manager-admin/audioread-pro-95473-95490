@@ -69,8 +69,8 @@ function App() {
       setCurrentPage(1);
       setDisplayPage(1);
       
-      // Use the pre-processed text chunks if available, or generate them
-      const chunks = selectedDoc.textChunks || splitTextIntoChunks(selectedDoc.text);
+      // Generate text chunks
+      const chunks = splitTextIntoChunks(selectedDoc.text || '');
       setTextChunks(chunks);
       setCurrentChunkIndex(0);
       setError(null);

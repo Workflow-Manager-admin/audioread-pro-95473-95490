@@ -5,7 +5,6 @@ import {
   removeDocument,
   getActiveDocument,
   setActiveDocumentId,
-  getActiveDocumentId,
   hasDocuments
 } from '../utils/documentStorage';
 import { getSampleDocument } from '../utils/sampleDocument';
