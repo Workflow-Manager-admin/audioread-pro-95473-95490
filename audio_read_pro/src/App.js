@@ -191,7 +191,7 @@ function App() {
     setIsPlaying(true);
   };
 
-  // Simple function to render text with clickable words
+  // Function to render text with clickable words, handling markdown-like content
   const renderTextWithClickableWords = (text) => {
     if (!text) return null;
     
@@ -202,16 +202,26 @@ function App() {
     return paragraphs.map((paragraph, paraIndex) => {
       if (!paragraph.trim()) return <p key={`p-${paraIndex}`}>&nbsp;</p>;
       
+      // Handle markdown-style headers
+      const isHeader = /^(#+)\s/.test(paragraph);
+      const headerLevel = isHeader ? paragraph.match(/^(#+)\s/)[1].length : 0;
+      
+      // Clean header markdown if present
+      const cleanParagraph = isHeader ? paragraph.replace(/^#+\s/, '') : paragraph;
+      
       // Get the current paragraph offset
       const paraOffset = totalOffset;
       totalOffset += paragraph.length + 1; // +1 for newline
       
       // Split paragraph into words
-      const words = paragraph.split(/\b(\w+)\b/g);
-      let wordOffset = paraOffset;
+      const words = cleanParagraph.split(/\b(\w+)\b/g);
+      let wordOffset = paraOffset + (paragraph.length - cleanParagraph.length);
+      
+      // Render appropriate element based on content type
+      const ParagraphTag = isHeader ? `h${Math.min(headerLevel, 6)}` : 'p';
       
       return (
-        <p key={`p-${paraIndex}`}>
+        <ParagraphTag key={`p-${paraIndex}`}>
           {words.map((word, wordIndex) => {
             const currentOffset = wordOffset;
             wordOffset += word.length;
@@ -232,7 +242,7 @@ function App() {
               return <span key={`space-${paraIndex}-${wordIndex}`}>{word}</span>;
             }
           })}
-        </p>
+        </ParagraphTag>
       );
     });
   };

@@ -91,10 +91,13 @@ const useDocumentLibrary = () => {
       // Add to storage
       const newDocument = addDocument(documentData);
       
-      // Update state
-      setDocuments(prev => [...prev, newDocument]);
-      
-      return newDocument;
+      // Update state if document was added successfully
+      if (newDocument) {
+        setDocuments(prev => [...prev, newDocument]);
+        return newDocument;
+      } else {
+        throw new Error('Failed to add document to storage');
+      }
     } catch (err) {
       console.error('Error adding document:', err);
       setError(`Failed to add document: ${err.message}`);
