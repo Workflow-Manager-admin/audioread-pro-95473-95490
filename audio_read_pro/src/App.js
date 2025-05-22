@@ -141,7 +141,12 @@ function App() {
       cancel();
       const utterance = new SpeechSynthesisUtterance(textChunks[bookmark.chunk]);
       utterance.rate = playbackRate;
-      utterance.voice = voices.find(v => v.default) || null;
+      
+      // Safely set voice if voices array is available
+      if (voices && voices.length > 0) {
+        utterance.voice = voices.find(v => v.default) || voices[0];
+      }
+      
       speak(utterance);
     }
   };
