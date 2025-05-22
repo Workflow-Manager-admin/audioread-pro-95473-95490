@@ -44,7 +44,9 @@ function App() {
     voices, 
     cancel, 
     setVoice,
-    speakFromPosition 
+    speakFromPosition,
+    setPlaybackContext,
+    getPlaybackContext
   } = useSpeechSynthesis();
   
   const {
