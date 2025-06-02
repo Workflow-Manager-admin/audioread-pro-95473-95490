@@ -497,6 +497,7 @@ function App() {
       // Always clear before speaking new page
       clearAllHighlights();
       cancel();
+      // Use canonical: do not skip first word
       speakFromGlobalPosition(pageStartPosition, {
         text: documentText,
         chunks: textChunks,
@@ -646,6 +647,7 @@ function App() {
 
     // Use globalPosition from bookmark for precise resume
     if (typeof bookmark.globalPosition === "number" && textChunks.length > bookmark.chunk) {
+      // Canonical: always start on the exact same char offset as the bookmark (never skip word/page start)
       speakFromGlobalPosition(bookmark.globalPosition, {
         text: documentText,
         chunks: textChunks,
