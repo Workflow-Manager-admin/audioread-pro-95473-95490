@@ -386,97 +386,87 @@ function App() {
     saveReadingPosition();
   };
 
-  // Handle word click with enhanced position tracking and page synchronization
+  // Seek to any word in the document using global positioning for perfect highlighting and resume
   const handleWordClick = (word, wordIndex, totalOffset) => {
     if (!activeDocument) return;
-    
-    // Use the global character position to find the correct chunk
+
+    // Locate the correct chunk and relative position (for tracking UI only)
     const { chunkIndex, relativePosition } = findChunkByPosition(totalOffset, textChunks);
-    
-    // Update current chunk index
+
     setCurrentChunkIndex(chunkIndex);
-    
-    // Find the correct page for this position and update if needed
+
+    // Sync page UI if necessary
     const positionInfo = getPositionInfo(totalOffset, chunkToPageMapping, docPages);
     if (positionInfo.pageNumber !== currentPage) {
       handlePageChange(positionInfo.pageNumber, false); // Don't auto-start speaking
     }
-    
-    // Speak from this position
-    if (speaking) {
-      cancel();
-    }
-    
-    speakFromPosition(relativePosition, { rate: playbackRate });
-    
-    // Update position tracking with global position
+
+    // Cancel any current speech
+    if (speaking) cancel();
+
+    // Play from the global char offset with all correct params
+    speakFromGlobalPosition(totalOffset, {
+      text: documentText,
+      chunks: textChunks,
+      voice: voices[selectedVoiceIndex],
+      rate: playbackRate
+    });
+
     lastPositionRef.current = {
       page: positionInfo.pageNumber,
       chunk: chunkIndex,
       position: relativePosition,
       globalPosition: totalOffset
     };
-    
-    // Update playback context
+
     setPlaybackContext({
       chunkIndex,
       pageIndex: positionInfo.pageNumber - 1,
       wordIndex: relativePosition
     });
-    
+
     setIsPlaying(true);
-    
-    // Save updated reading position
     saveReadingPosition();
   };
 
-  // Handle page navigation with enhanced audio synchronization
+  // Page navigation: synchronize audio from start of new page using global char index API
   const handlePageChange = (newPage, shouldSpeak = true) => {
     if (!activeDocument || !docPages.length || newPage < 1 || newPage > docPages.length) return;
-    
-    // Update page state
+
     setCurrentPage(newPage);
-    
-    // Update current page text
-    if (docPages[newPage - 1]) {
-      setCurrentPageText(docPages[newPage - 1].text);
-    }
-    
-    // Get the start position of this page
+    if (docPages[newPage - 1]) setCurrentPageText(docPages[newPage - 1].text);
+
+    // Get page start position (global char index)
     const pageStartPosition = docPages[newPage - 1]?.startPosition || 0;
-    
-    // Find the chunk that contains the start of this page
+
+    // Find which chunk contains this global char position
     const { chunkIndex, relativePosition } = findChunkByPosition(pageStartPosition, textChunks);
-    
-    // Update current chunk index
     setCurrentChunkIndex(chunkIndex);
-    
-    // Update position tracking with global position
+
     lastPositionRef.current = {
       page: newPage,
       chunk: chunkIndex,
       position: relativePosition,
       globalPosition: pageStartPosition
     };
-    
-    // If requested, start speaking from this position
+
     if (shouldSpeak) {
-      if (speaking) {
-        cancel();
-      }
-      
-      speak(textChunks[chunkIndex], { rate: playbackRate });
+      if (speaking) cancel();
+      speakFromGlobalPosition(pageStartPosition, {
+        text: documentText,
+        chunks: textChunks,
+        voice: voices[selectedVoiceIndex],
+        rate: playbackRate
+      });
       setIsPlaying(true);
     }
-    
-    // Update playback context
+
     setPlaybackContext({
       chunkIndex,
       pageIndex: newPage - 1,
       wordIndex: relativePosition
     });
-    
-    // Save updated reading position
+
     saveReadingPosition();
   };
 
@@ -559,48 +549,42 @@ function App() {
     setBookmarks(prev => [...prev, newBookmark]);
   };
 
-  // Jump to a bookmark with enhanced position handling
+  // Resume from bookmarks accurately using global char index and voice/speed
   const jumpToBookmark = (bookmark) => {
-    // Ensure we're using the correct document
+    // If switching documents, let document selection handle position
     if (activeDocument && bookmark.documentId && bookmark.documentId !== activeDocument.id) {
       setActiveDocumentById(bookmark.documentId);
-      // The rest will be handled when the active document changes
       return;
     }
-    
-    // Navigate to the bookmark's page
-    handlePageChange(bookmark.page, false); // Don't auto-start speech
-    
-    // Set chunk index
+
+    // Go to correct page visually, but don't start playback yet
+    handlePageChange(bookmark.page, false);
     setCurrentChunkIndex(bookmark.chunk);
-    
-    if (speaking) {
-      cancel();
-    }
-    
-    // Start speaking from the saved position
-    if (textChunks.length > bookmark.chunk) {
-      if (bookmark.position) {
-        speakFromPosition(bookmark.position, { rate: playbackRate });
-      } else {
-        speak(textChunks[bookmark.chunk], { rate: playbackRate });
-      }
-      
-      // Update position tracking
+
+    if (speaking) cancel();
+
+    // Use globalPosition from bookmark for precise resume
+    if (typeof bookmark.globalPosition === "number" && textChunks.length > bookmark.chunk) {
+      speakFromGlobalPosition(bookmark.globalPosition, {
+        text: documentText,
+        chunks: textChunks,
+        voice: voices[selectedVoiceIndex],
+        rate: playbackRate
+      });
+
       lastPositionRef.current = {
         page: bookmark.page,
         chunk: bookmark.chunk,
         position: bookmark.position || 0,
         globalPosition: bookmark.globalPosition || 0
       };
-      
-      // Update playback context
+
       setPlaybackContext({
         chunkIndex: bookmark.chunk,
         pageIndex: bookmark.page - 1,
         wordIndex: bookmark.position || 0
       });
-      
+
       setIsPlaying(true);
     }
   };
