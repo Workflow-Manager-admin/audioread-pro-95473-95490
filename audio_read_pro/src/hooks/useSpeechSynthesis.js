@@ -332,45 +332,91 @@ const useSpeechSynthesis = () => {
     // Word boundary event: synchronize highlight using global char index
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
-        // Robustly calculate the global character index and spoken word for accurate highlight sync.
+        // --- Unified span mapping using splitTextToWordSpans for robust highlight sync ---
         const localCharIdx = event.charIndex;
         const globalIndex = accumulatedLength + utterStart + localCharIdx;
 
-        // Extract the word using the actual uttered text segment.
-        let wordMatch = '';
-        let searchText = textToSpeak.slice(localCharIdx);
-        // Match word characters robustly, allowing for apostrophes/hyphens.
-        const match = searchText.match(/^([\w'-]+)/);
-        if (match && match[1]) {
-          wordMatch = match[1];
-        } else {
-          // as fallback, try to grab one char if not whitespace
-          const charAt = searchText.charAt(0);
-          if (charAt && /\w/.test(charAt)) {
-            wordMatch = charAt;
+        // Compose the full document-level word spans using splitTextToWordSpans to align indices.
+        // This is the canonical mapping for both rendering and highlighting.
+        let wordSpans;
+        try {
+          // Always run with the canonical full text and 0 offset (ensures global mapping)
+          // (If text is missing, fallback to textToSpeak or '')
+          wordSpans = splitTextToWordSpans(text || textToSpeak || '', 0);
+        } catch (err) {
+          wordSpans = [];
+        }
+
+        // Find the span containing the matching globalIndex, preferring an actual word span.
+        let foundSpan = null;
+        for (let i = 0; i < wordSpans.length; i++) {
+          const span = wordSpans[i];
+          // Defensive: account for spans that are empty or have no offset.
+          if (
+            span &&
+            typeof span.offset === 'number' &&
+            span.word &&
+            globalIndex >= span.offset &&
+            globalIndex < span.offset + span.text.length
+          ) {
+            foundSpan = span;
+            break;
           }
         }
-        // Defensive fallback to previous word if no match at all
-        if (!wordMatch) wordMatch = lastWordRef.current || '';
+        // Defensive: If not found, fallback to the nearest word span before globalIndex
+        if (!foundSpan) {
+          // Find the closest word span with offset <= globalIndex
+          let best = null;
+          for (let i = 0; i < wordSpans.length; i++) {
+            const s = wordSpans[i];
+            if (s && s.word && typeof s.offset === 'number' && s.offset <= globalIndex) {
+              if (!best || s.offset > best.offset) best = s;
+            }
+          }
+          foundSpan = best;
+        }
+
+        // Prepare word and charIndex (default to previous if not found)
+        let wordMatch = '';
+        let charIdx = globalIndex;
+
+        if (foundSpan) {
+          wordMatch = foundSpan.text;
+          charIdx = foundSpan.offset;
+        } else {
+          // fallback to previous
+          wordMatch = lastWordRef.current || '';
+          charIdx = globalIndex;
+        }
+        // Out-of-bounds (end of doc): defensive fallback, never index past length
+        if (
+          typeof wordMatch === 'string' &&
+          typeof charIdx === 'number' &&
+          text &&
+          charIdx + wordMatch.length > text.length
+        ) {
+          wordMatch = '';
+        }
 
         // Store for downstream listeners
         lastWordRef.current = wordMatch;
 
         // For rare TTS sync quirks, keep currentPosition updated accurately
-        currentPositionRef.current = globalIndex;
+        currentPositionRef.current = charIdx;
 
         currentWordDataRef.current = {
           word: wordMatch,
-          charIndex: globalIndex,
+          charIndex: charIdx,
           startTime: performance.now(),
         };
+
         if (wordBoundaryListenersRef.current.length > 0) {
           const wordData = {
             word: wordMatch,
-            charIndex: globalIndex,
+            charIndex: charIdx,
             wordPosition: {
-              start: globalIndex,
-              end: globalIndex + wordMatch.length,
+              start: charIdx,
+              end: charIdx + (wordMatch ? wordMatch.length : 1),
             },
             text,
             timestamp: performance.now(),
