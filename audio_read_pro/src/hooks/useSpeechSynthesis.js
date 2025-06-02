@@ -254,6 +254,15 @@ const useSpeechSynthesis = () => {
       !options.text ||
       !Array.isArray(options.chunks)
     ) return;
+    if (!isSpeechSynthesisActive()) {
+      fatalSyncErrorRef.current = true;
+      setSpeaking(false);
+      setPaused(false);
+      wordBoundaryListenersRef.current.forEach(listener => {
+        try { listener({ type: "fatal-sync", reason: "SpeechSynthesis API unavailable" }); } catch {}
+      });
+      return;
+    }
 
     clearSpeechTimeouts();
     const { text, chunks, voice, rate, pitch, volume } = options;
@@ -534,7 +543,8 @@ const useSpeechSynthesis = () => {
     getPlaybackContext,
     lastWord: lastWordRef.current,
     registerWordBoundaryListener,
-    getCurrentWordData
+    getCurrentWordData,
+    isFatalSyncError: () => !!fatalSyncErrorRef.current // <--- Use in App.js for user banner
   };
 };
 
