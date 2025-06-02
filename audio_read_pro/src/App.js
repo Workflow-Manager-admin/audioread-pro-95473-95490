@@ -321,25 +321,23 @@ function App() {
   const handleNext = () => {
     if (!activeDocument || currentChunkIndex >= textChunks.length - 1) return;
 
+    // Force context reset/cancel before any logic
+    clearAllHighlights();
+    cancel();
+
     const nextChunkIndex = currentChunkIndex + 1;
 
     let nextPage = currentPage;
     if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[nextChunkIndex]) {
       nextPage = chunkToPageMapping.chunkToPage[nextChunkIndex];
       if (nextPage !== currentPage) {
-        clearAllHighlights(); // Always clean highlights upon page jump
         handlePageChange(nextPage, true); // Auto-start speaking at true start
         return; // handlePageChange performs all state/audio resets
       }
     }
 
     setCurrentChunkIndex(nextChunkIndex);
-    clearAllHighlights();
 
-    // Cancel existing playback
-    if (speaking) cancel();
-
-    // Use global character index for start of next chunk
     const chunkStart = chunkToPageMapping.chunkPositions?.[nextChunkIndex]?.start || 0;
     speakFromGlobalPosition(chunkStart, {
       text: documentText,
@@ -369,25 +367,23 @@ function App() {
   const handlePrevious = () => {
     if (!activeDocument || currentChunkIndex <= 0) return;
 
+    // Force context reset/cancel before any logic
+    clearAllHighlights();
+    cancel();
+
     const prevChunkIndex = currentChunkIndex - 1;
 
     let prevPage = currentPage;
     if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[prevChunkIndex]) {
       prevPage = chunkToPageMapping.chunkToPage[prevChunkIndex];
       if (prevPage !== currentPage) {
-        clearAllHighlights();
         handlePageChange(prevPage, true);
         return;
       }
     }
 
     setCurrentChunkIndex(prevChunkIndex);
-    clearAllHighlights();
 
-    // Cancel any existing playback
-    if (speaking) cancel();
-
-    // Use global char index for start of previous chunk
     const chunkStart = chunkToPageMapping.chunkPositions?.[prevChunkIndex]?.start || 0;
     speakFromGlobalPosition(chunkStart, {
       text: documentText,
@@ -417,6 +413,10 @@ function App() {
   const handleWordClick = (word, wordIndex, totalOffset) => {
     if (!activeDocument) return;
 
+    // Force context reset/cancel before any logic
+    clearAllHighlights();
+    cancel();
+
     // Locate the correct chunk and relative position (for tracking UI only)
     const { chunkIndex, relativePosition } = findChunkByPosition(totalOffset, textChunks);
 
@@ -428,10 +428,6 @@ function App() {
       handlePageChange(positionInfo.pageNumber, false); // Don't auto-start speaking
     }
 
-    // Cancel any current speech
-    if (speaking) cancel();
-
-    // Play from the global char offset with all correct params
     speakFromGlobalPosition(totalOffset, {
       text: documentText,
       chunks: textChunks,
