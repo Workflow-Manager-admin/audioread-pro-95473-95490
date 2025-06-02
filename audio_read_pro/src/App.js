@@ -735,13 +735,16 @@ function App() {
   // Handle word boundary events for auto-scrolling & precise highlighting (robust and unambiguous)
   const handleWordBoundary = useCallback((wordData) => {
     if (!wordData || typeof wordData.charIndex !== "number" || !wordData.word) return;
-
-    // Find the correct page
+    
+    // --- Robustly determine the correct page and word span for highlighting ---
+    // Find the correct page for this char offset (defensive: stay within bounds)
     let pageIdx = docPages.findIndex(page =>
       wordData.charIndex >= page.startPosition && wordData.charIndex < page.endPosition
     );
-    if (pageIdx === -1)
+    if (pageIdx === -1) {
+      // Fallback: guess from currentPage or clamp to valid
       pageIdx = Math.max(0, Math.min(currentPage - 1, docPages.length - 1));
+    }
 
     // If page has changed (due to seek), update UI sync
     if ((pageIdx + 1) !== currentPage) {
@@ -750,24 +753,38 @@ function App() {
     }
 
     const pageStartPosition = docPages[pageIdx]?.startPosition || 0;
-    const relativeCharIndex = wordData.charIndex - pageStartPosition;
-    const canonicalKey = `word-${relativeCharIndex}-${wordData.word}`.replace(/\s+/g, '').toLowerCase();
-    let wordElement = null;
+    const pageEndPosition = docPages[pageIdx]?.endPosition || 0;
 
+    // Use canonical splitTextToWordSpans logic to find the rendered span.
+    const canonicalSpan = (sharedWordSpans || []).find(
+      span =>
+        typeof span.offset === 'number' &&
+        span.word &&
+        span.offset <= wordData.charIndex &&
+        wordData.charIndex < span.offset + span.text.length
+    );
+    // Defensive fallback for when boundary word is just after the last span (e.g., abrupt TTS finish)
+    let wordKey = null;
+    if (canonicalSpan && canonicalSpan.offset >= pageStartPosition && canonicalSpan.offset < pageEndPosition) {
+      const relOffset = canonicalSpan.offset - pageStartPosition;
+      wordKey = `word-${relOffset}-${canonicalSpan.text}`.replace(/\s+/g, '').toLowerCase();
+    }
+
+    let wordElement = null;
     // Clear all previous highlights before applying new one
     clearAllHighlights();
 
-    // Direct map by canonical key
-    if (wordElementsRef.current[canonicalKey]) {
-      wordElement = document.getElementById(wordElementsRef.current[canonicalKey]);
+    // Primary: direct map by canonical key if found
+    if (wordKey && wordElementsRef.current[wordKey]) {
+      wordElement = document.getElementById(wordElementsRef.current[wordKey]);
     }
 
-    // If not found, fallback: try searching for nearest word span with matching offset
+    // If not found, fallback: search for nearest span in DOM with matching offset/text within current page
     if (!wordElement && documentContentRef.current) {
       const spans = documentContentRef.current.querySelectorAll('span.clickable-word');
-      let bestMatch = null, bestDist = 1000;
+      let bestMatch = null, bestDist = 10000;
       spans.forEach(el => {
-        if ((el.textContent || '').trim().toLowerCase() === wordData.word.trim().toLowerCase()) {
+        if ((el.textContent || '').trim().toLowerCase() === (wordData.word || '').trim().toLowerCase()) {
           const offset = Number(el.getAttribute('data-offset'));
           const dist = Math.abs(offset - wordData.charIndex);
           if (dist < bestDist) {
@@ -779,8 +796,17 @@ function App() {
       if (bestMatch) wordElement = bestMatch;
     }
 
+    // Defensive: skip highlight if not on visible page, or if out of bounds of current word spans
+    if (
+      !wordElement ||
+      !(canonicalSpan && canonicalSpan.offset >= pageStartPosition && canonicalSpan.offset < pageEndPosition)
+    ) {
+      currentWordRef.current = null;
+      return;
+    }
+
     // Highlight/unhighlight as appropriate
-    if (currentWordRef.current && currentWordRef.current !== wordElement?.id) {
+    if (currentWordRef.current && currentWordRef.current !== wordElement.id) {
       const prevWord = document.getElementById(currentWordRef.current);
       if (prevWord) prevWord.classList.remove('word-current', 'word-spoken');
     }
@@ -800,7 +826,7 @@ function App() {
         });
       }
     }
-  }, [docPages, currentPage]);
+  }, [docPages, currentPage, sharedWordSpans]);
 
   // Save bookmarks with current active document
   useEffect(() => {
