@@ -628,28 +628,46 @@ function App() {
   };
   
   // Handle word boundary events for auto-scrolling and highlighting
+  // Enhanced: Always use updated wordData.charIndex (global offset) to find and apply highlight
   const handleWordBoundary = useCallback((wordData) => {
-    if (!wordData || !wordData.word) return;
-    
-    const { word, charIndex } = wordData;
-    
-    // Get the page offset for the current page
-    const pageStartPosition = docPages[currentPage - 1]?.startPosition || 0;
-    const relativeCharIndex = charIndex - pageStartPosition;
-    
-    // Find the word element based on the char index or word content
-    const wordKey = `word-${relativeCharIndex}-${word}`;
-    const alternateKey = Object.keys(wordElementsRef.current).find(key => 
-      key.includes(`-${word}`) && Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 50
-    );
-    
-    const wordElementId = wordElementsRef.current[wordKey] || 
-                        (alternateKey && wordElementsRef.current[alternateKey]) ||
-                        `word-${relativeCharIndex}`;
-    
+    if (!wordData || typeof wordData.charIndex !== "number" || !wordData.word) return;
+
+    // Find which page contains this charIndex
+    let pageIdx = 0;
+    for (let i = 0; i < docPages.length; i++) {
+      if (wordData.charIndex >= docPages[i].startPosition && wordData.charIndex < docPages[i].endPosition) {
+        pageIdx = i;
+        break;
+      }
+    }
+    // If not found, fallback to currentPage - 1 but clamp range
+    if (docPages.length > 0 && (pageIdx < 0 || pageIdx >= docPages.length)) {
+      pageIdx = Math.max(0, Math.min(currentPage - 1, docPages.length - 1));
+    }
+
+    // If page has changed (due to seeking), update current page to sync highlight
+    if ((pageIdx + 1) !== currentPage) {
+      setCurrentPage(pageIdx + 1);
+      setCurrentPageText(docPages[pageIdx]?.text || '');
+    }
+
+    const pageStartPosition = docPages[pageIdx]?.startPosition || 0;
+    const relativeCharIndex = wordData.charIndex - pageStartPosition;
+    // The word key algorithm must match that in renderTextWithClickableWords
+    const wordKey = `word-${relativeCharIndex}-${wordData.word}`;
+
+    // Find the closest matching word element as fallback
+    let wordElementId = wordElementsRef.current[wordKey];
+    if (!wordElementId) {
+      // Fallback: search for a close match (for punctuation or off-by-one errors)
+      const altKey = Object.keys(wordElementsRef.current).find(key =>
+        key.endsWith(`-${wordData.word}`) && Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 6
+      );
+      wordElementId = (altKey && wordElementsRef.current[altKey]) || `word-${relativeCharIndex}-${wordData.word}`;
+    }
     const wordElement = document.getElementById(wordElementId);
-    
-    // Update current word ref and remove highlight from previous word
+
+    // Always clean up previous highlight
     if (currentWordRef.current) {
       const prevWordElement = document.getElementById(currentWordRef.current);
       if (prevWordElement) {
@@ -657,25 +675,21 @@ function App() {
         prevWordElement.classList.add('word-spoken');
       }
     }
-    
-    // Set and highlight the new current word
+
     if (wordElement) {
       currentWordRef.current = wordElementId;
       wordElement.classList.add('word-current');
-      
-      // Scroll the word into view if auto-scrolling is enabled
+
       if (autoScrollingRef.current && documentContentRef.current) {
-        const docView = documentContentRef.current;
-        
-        // Scroll with smooth behavior to center the word in view
         wordElement.scrollIntoView({
-          behavior: 'smooth', 
+          behavior: 'smooth',
           block: 'center',
           inline: 'nearest'
         });
       }
     }
-  }, [currentPage, docPages]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docPages, currentPage]);
 
   // Save bookmarks with current active document
   useEffect(() => {
@@ -707,45 +721,39 @@ function App() {
     }
   }, [activeDocument]);
 
-  // Set up the word boundary listener when speaking status changes
+  // Set up the word boundary listener when speaking status changes or playback config changes
   useEffect(() => {
-    // Only register listener when speaking and not paused
     if (speaking && !paused) {
-      // Enable auto-scrolling
       autoScrollingRef.current = true;
-      
-      // Register the word boundary listener
-      if (!wordBoundaryUnsubscribeRef.current) {
-        wordBoundaryUnsubscribeRef.current = registerWordBoundaryListener(handleWordBoundary);
+      // Always (re-)register word boundary listener for newest context
+      if (wordBoundaryUnsubscribeRef.current) {
+        wordBoundaryUnsubscribeRef.current();
       }
+      wordBoundaryUnsubscribeRef.current = registerWordBoundaryListener(handleWordBoundary);
     } else {
-      // If not speaking or paused, we can disable auto-scrolling
       autoScrollingRef.current = false;
     }
-    
-    // Clean up on unmount or when speaking state changes
+    // Clean up on unmount or deps change
     return () => {
       if (wordBoundaryUnsubscribeRef.current) {
         wordBoundaryUnsubscribeRef.current();
         wordBoundaryUnsubscribeRef.current = null;
       }
     };
-  }, [speaking, paused, registerWordBoundaryListener, handleWordBoundary]);
+  }, [speaking, paused, registerWordBoundaryListener, handleWordBoundary, docPages, currentPage]);
   
-  // Clean up highlighting when changing pages
+  // Clean up highlighting when changing pages (resync highlight after resumes/seeks)
   useEffect(() => {
-    // Reset the word elements mapping when page changes
+    // Always clear highlight states
     wordElementsRef.current = {};
     currentWordRef.current = null;
-    
-    // Return cleanup function
-    return () => {
-      const highlightedElements = document.querySelectorAll('.word-current, .word-spoken');
-      highlightedElements.forEach(el => {
-        el.classList.remove('word-current', 'word-spoken');
-      });
-    };
-  }, [currentPage]);
+
+    // Remove any lingering highlights
+    const highlightedElements = document.querySelectorAll('.word-current, .word-spoken');
+    highlightedElements.forEach(el => {
+      el.classList.remove('word-current', 'word-spoken');
+    });
+  }, [currentPage, docPages]);
 
   // Cleanup speech synthesis on unmount
   useEffect(() => {
