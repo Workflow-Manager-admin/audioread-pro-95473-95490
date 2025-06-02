@@ -472,62 +472,92 @@ function App() {
     saveReadingPosition();
   };
 
-  // Render text with clickable words - updated to use enhanced page information and IDs for tracking
+  // --- UTIL: Canonical word splitting (mirror TTS and regex handling) ---
+  // Splits text into an array of words and non-word spans, with char offsets for each.
+  function splitTextToWordSpans(text, startOffset) {
+    const pattern = /([A-Za-z0-9'’\\-]+|[^\w\s]+)/g; // robust: words, apostrophes, dash, punctuation
+    const result = [];
+    let match;
+    let currentOffset = startOffset || 0;
+    let lastIndex = 0;
+
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        // Push intervening whitespace as non-clickable
+        const ws = text.slice(lastIndex, match.index);
+        result.push({ text: ws, offset: currentOffset, word: false });
+        currentOffset += ws.length;
+      }
+      const wordText = match[0];
+      const isWord = /^[A-Za-z0-9'’\-]+$/.test(wordText);
+      result.push({ text: wordText, offset: currentOffset, word: isWord });
+      currentOffset += wordText.length;
+      lastIndex = match.index + wordText.length;
+    }
+    // Push trailing whitespace if any
+    if (lastIndex < text.length) {
+      result.push({
+        text: text.slice(lastIndex),
+        offset: currentOffset,
+        word: false
+      });
+    }
+    return result;
+  }
+
+  // --- Robust clear all highlights: ---
+  function clearAllHighlights() {
+    document.querySelectorAll('.word-current, .word-spoken').forEach(el => {
+      el.classList.remove('word-current', 'word-spoken');
+    });
+  }
+
+  // Render text with clickable words, emitting spans aligned to canonical offsets
   const renderTextWithClickableWords = () => {
     if (!currentPageText) return null;
-    
-    // Get the current page's starting position in the full document
-    const pageStartPosition = docPages[currentPage - 1]?.startPosition || 0;
-    
-    // Reset word elements mapping for this page
+    clearAllHighlights();
+
+    // Correct starting offset for this page within the global text
+    const pageStart = docPages[currentPage - 1]?.startPosition || 0;
     wordElementsRef.current = {};
-    
+
     // Split text into paragraphs
     const paragraphs = currentPageText.split('\n');
-    let totalOffset = pageStartPosition; // Start from the page's global offset
-    
+    let runningOffset = pageStart;
+
     return paragraphs.map((paragraph, paraIndex) => {
-      if (!paragraph.trim()) return <p key={`p-${paraIndex}`}>&nbsp;</p>;
-      
-      // Get the current paragraph offset
-      const paraOffset = totalOffset;
-      totalOffset += paragraph.length + 1; // +1 for newline
-      
-      // Split paragraph into words
-      const words = paragraph.split(/\b(\w+)\b/g);
-      let wordOffset = paraOffset;
-      
+      if (!paragraph.trim()) {
+        runningOffset += paragraph.length + 1;
+        return <p key={`p-${paraIndex}`}>&nbsp;</p>;
+      }
+
+      const spans = splitTextToWordSpans(paragraph, runningOffset);
+      runningOffset += paragraph.length + 1;
+
       return (
         <p key={`p-${paraIndex}`}>
-          {words.map((word, wordIndex) => {
-            const currentOffset = wordOffset;
-            wordOffset += word.length;
-            
-            // Only make actual words clickable (not spaces, punctuation)
-            if (/\w+/.test(word)) {
-              // Create a normalized, lower-case word key/id for robust mapping.
-              const rawKey = `word-${currentOffset - pageStartPosition}-${word}`;
-              const wordKey = rawKey.replace(/\s+/g, '').toLowerCase();
-              const wordId = wordKey;
+          {spans.map((span, idx) => {
+            const wordKey = `word-${span.offset - pageStart}-${span.text}`.replace(/\s+/g, '').toLowerCase();
+            const wordId = wordKey;
 
-              // Store the mapping between char position and word element ID
+            if (span.word) {
               wordElementsRef.current[wordKey] = wordId;
-
               return (
-                <span 
+                <span
                   id={wordId}
-                  key={`word-${paraIndex}-${wordIndex}`}
+                  key={wordKey}
                   className="clickable-word"
-                  onClick={() => handleWordClick(word, wordIndex, currentOffset)}
+                  onClick={() => handleWordClick(span.text, idx, span.offset)}
+                  data-offset={span.offset}
+                  data-word={span.text}
                   style={{ cursor: 'pointer' }}
-                  data-offset={currentOffset}
-                  data-word={word}
                 >
-                  {word}
+                  {span.text}
                 </span>
               );
             } else {
-              return <span key={`space-${paraIndex}-${wordIndex}`}>{word}</span>;
+              // Spaces or punctuation
+              return <span key={`space-${paraIndex}-${idx}`}>{span.text}</span>;
             }
           })}
         </p>
