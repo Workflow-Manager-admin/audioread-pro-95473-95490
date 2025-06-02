@@ -502,13 +502,15 @@ function App() {
             
             // Only make actual words clickable (not spaces, punctuation)
             if (/\w+/.test(word)) {
-              // Create a unique ID for this word
-              const wordId = `word-${currentOffset - pageStartPosition}-${word}`;
-              
+              // Create a normalized, lower-case word key/id for robust mapping.
+              const rawKey = `word-${currentOffset - pageStartPosition}-${word}`;
+              const wordKey = rawKey.replace(/\s+/g, '').toLowerCase();
+              const wordId = wordKey;
+
               // Store the mapping between char position and word element ID
               const relativeCharIndex = currentOffset - pageStartPosition;
-              wordElementsRef.current[`word-${relativeCharIndex}-${word}`] = wordId;
-              
+              wordElementsRef.current[wordKey] = wordId;
+
               return (
                 <span 
                   id={wordId}
@@ -648,18 +650,18 @@ function App() {
 
     const pageStartPosition = docPages[pageIdx]?.startPosition || 0;
     const relativeCharIndex = wordData.charIndex - pageStartPosition;
-    // Robust approach for word key: lower-case, trim, no leading/trailing whitespace, safe to falling-back
+
+    // __ Robust lookup, normalized/whitespace-safe keys __
     let wordKey = `word-${relativeCharIndex}-${wordData.word}`;
     wordKey = wordKey.replace(/\s+/g, '').toLowerCase();
 
-    // Attempt direct match first
+    // Attempt direct key->id match
     let wordElementId = wordElementsRef.current[wordKey];
     let wordElement = wordElementId ? document.getElementById(wordElementId) : null;
 
-    // Fallback: try nearby key with same word, allowing for minor index imprecision (e.g. punctuation)
+    // Fallback: try nearby id/key match for the same word
     if (!wordElement) {
       const possibleKeys = Object.entries(wordElementsRef.current);
-      // Search for key where word matches ignoring case, and char index within 5 of target
       let bestDistance = Number.MAX_SAFE_INTEGER, candidateId = null;
       for (const [key, id] of possibleKeys) {
         const match = key.match(/^word-(\-?\d+)-(.+)$/);
@@ -684,18 +686,16 @@ function App() {
       }
     }
 
-    // As a last resort: just find a span in the page with text content matching and closest to the right offset.
+    // As a last resort, search for a span in the page content with matching text and closest offset.
     if (!wordElement) {
       const docContent = documentContentRef.current;
       if (docContent) {
-        // Find all span elements
         const spans = docContent.querySelectorAll('span.clickable-word');
         let bestMatch = null;
         let bestDist = Number.MAX_SAFE_INTEGER;
         spans.forEach(el => {
           const elWord = (el.textContent || '').replace(/\s+/g, '').toLowerCase();
           if (elWord === wordData.word.replace(/\s+/g, '').toLowerCase()) {
-            // Try matching offset if possible
             const offset = Number(el.getAttribute('data-offset'));
             const dist = Math.abs(offset - wordData.charIndex);
             if (dist < bestDist) {
