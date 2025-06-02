@@ -332,26 +332,22 @@ const useSpeechSynthesis = () => {
     // Word boundary event: synchronize highlight using global char index
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
-        // --- Unified span mapping using splitTextToWordSpans for robust highlight sync ---
+        // --- Always use splitTextToWordSpans as the sole mapping for boundary-to-word synchronization ---
         const localCharIdx = event.charIndex;
         const globalIndex = accumulatedLength + utterStart + localCharIdx;
 
-        // Compose the full document-level word spans using splitTextToWordSpans to align indices.
-        // This is the canonical mapping for both rendering and highlighting.
         let wordSpans;
         try {
-          // Always run with the canonical full text and 0 offset (ensures global mapping)
-          // (If text is missing, fallback to textToSpeak or '')
+          // Canonical mapping: always use full original text, global 0 offset
           wordSpans = splitTextToWordSpans(text || textToSpeak || '', 0);
         } catch (err) {
           wordSpans = [];
         }
 
-        // Find the span containing the matching globalIndex, preferring an actual word span.
+        // Robust: Find the span containing globalIndex and which is a word
         let foundSpan = null;
         for (let i = 0; i < wordSpans.length; i++) {
           const span = wordSpans[i];
-          // Defensive: account for spans that are empty or have no offset.
           if (
             span &&
             typeof span.offset === 'number' &&
@@ -363,20 +359,27 @@ const useSpeechSynthesis = () => {
             break;
           }
         }
-        // Defensive: If not found, fallback to the nearest word span before globalIndex
+        // Defensive fallback: Select last span <= globalIndex within 50 chars, or null
         if (!foundSpan) {
-          // Find the closest word span with offset <= globalIndex
           let best = null;
+          let closestDist = Infinity;
           for (let i = 0; i < wordSpans.length; i++) {
             const s = wordSpans[i];
-            if (s && s.word && typeof s.offset === 'number' && s.offset <= globalIndex) {
-              if (!best || s.offset > best.offset) best = s;
+            if (
+              s &&
+              s.word &&
+              typeof s.offset === 'number' &&
+              s.offset <= globalIndex &&
+              globalIndex - s.offset < closestDist &&
+              globalIndex - s.offset < 50
+            ) {
+              closestDist = globalIndex - s.offset;
+              best = s;
             }
           }
           foundSpan = best;
         }
 
-        // Prepare word and charIndex (default to previous if not found)
         let wordMatch = '';
         let charIdx = globalIndex;
 
@@ -384,11 +387,15 @@ const useSpeechSynthesis = () => {
           wordMatch = foundSpan.text;
           charIdx = foundSpan.offset;
         } else {
-          // fallback to previous
-          wordMatch = lastWordRef.current || '';
+          // Defensive fallback: try to get character at globalIndex if wordish, else empty
+          const rawChar =
+            typeof text === 'string' && globalIndex < text.length
+              ? text.charAt(globalIndex)
+              : '';
+          wordMatch = /\w/.test(rawChar) ? rawChar : '';
           charIdx = globalIndex;
         }
-        // Out-of-bounds (end of doc): defensive fallback, never index past length
+        // Out-of-bounds/end: fallback to empty and clamp
         if (
           typeof wordMatch === 'string' &&
           typeof charIdx === 'number' &&
@@ -398,12 +405,8 @@ const useSpeechSynthesis = () => {
           wordMatch = '';
         }
 
-        // Store for downstream listeners
         lastWordRef.current = wordMatch;
-
-        // For rare TTS sync quirks, keep currentPosition updated accurately
         currentPositionRef.current = charIdx;
-
         currentWordDataRef.current = {
           word: wordMatch,
           charIndex: charIdx,
