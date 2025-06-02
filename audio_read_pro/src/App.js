@@ -61,7 +61,6 @@ function App() {
 
   // Use our custom hooks for speech synthesis and document management
   const { 
-    speak, 
     speaking, 
     paused,
     pause,
@@ -69,7 +68,7 @@ function App() {
     voices, 
     cancel, 
     setVoice,
-    speakFromPosition,
+    speakFromGlobalPosition,
     setPlaybackContext,
     getPlaybackContext,
     registerWordBoundaryListener
