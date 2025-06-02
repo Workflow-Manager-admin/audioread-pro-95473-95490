@@ -341,6 +341,7 @@ function App() {
     setCurrentChunkIndex(nextChunkIndex);
 
     const chunkStart = chunkToPageMapping.chunkPositions?.[nextChunkIndex]?.start || 0;
+    // Always use canonical, never skip the first word
     speakFromGlobalPosition(chunkStart, {
       text: documentText,
       chunks: textChunks,
@@ -430,6 +431,7 @@ function App() {
       handlePageChange(positionInfo.pageNumber, false); // Don't auto-start speaking
     }
 
+    // Always use canonical
     speakFromGlobalPosition(totalOffset, {
       text: documentText,
       chunks: textChunks,
