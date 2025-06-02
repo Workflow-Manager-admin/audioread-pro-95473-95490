@@ -228,6 +228,143 @@ const useSpeechSynthesis = () => {
     
     speak(utterance);
   }
+
+  // PUBLIC_INTERFACE
+  /**
+   * Speak from a global character position in the provided text, with options.
+   * This supports accurate resume when changing voices/rates or jumping anywhere, maintaining highlight sync.
+   * @param {number} globalCharIndex - Character offset in the document (absolute, not chunk-relative)
+   * @param {object} options - { voice, rate, pitch, volume, text, chunks }
+   *   - text: full document text (required)
+   *   - chunks: array of chunks (required, as produced by splitTextIntoChunks)
+   *   - voice: SpeechSynthesisVoice instance (optional)
+   *   - rate/pitch/volume: speech params (optional)
+   * @returns {void}
+   */
+  function speakFromGlobalPosition(globalCharIndex, options = {}) {
+    if (
+      typeof globalCharIndex !== 'number' ||
+      !options.text ||
+      !Array.isArray(options.chunks)
+    ) {
+      return;
+    }
+
+    const { text, chunks, voice, rate, pitch, volume } = options;
+
+    // Find which chunk contains the globalCharIndex
+    let accumulatedLength = 0;
+    let targetChunkIndex = 0;
+    let inChunkIndex = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkLen = chunks[i].length;
+      if (
+        globalCharIndex >= accumulatedLength &&
+        globalCharIndex < accumulatedLength + chunkLen
+      ) {
+        targetChunkIndex = i;
+        inChunkIndex = globalCharIndex - accumulatedLength;
+        break;
+      }
+      accumulatedLength += chunkLen;
+    }
+
+    // Cancel any existing speech
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    // Prepare and configure utterance with the correct voice/speed
+    const chunkText = chunks[targetChunkIndex];
+    const utterStartPos = inChunkIndex;
+    const speakText = chunkText.substring(utterStartPos);
+
+    // Select voice
+    let usedVoice = null;
+    if (voice) {
+      usedVoice = voice;
+      selectedVoiceRef.current = voice;
+    } else if (selectedVoiceRef.current) {
+      usedVoice = selectedVoiceRef.current;
+    }
+
+    const utterOptions = {
+      rate: rate ?? 1,
+      pitch: pitch ?? 1,
+      volume: volume ?? 1,
+    };
+
+    // Construct custom utterance so .voice can be reliably set
+    const utterance = new SpeechSynthesisUtterance(speakText);
+    // These must be set via property, not constructor param
+    if (usedVoice) utterance.voice = usedVoice;
+    Object.keys(utterOptions).forEach(optKey => {
+      if (optKey in utterance && utterOptions[optKey] !== undefined) {
+        utterance[optKey] = utterOptions[optKey];
+      }
+    });
+
+    // Set up onend/onerror highlight-cancel handlers like in `speak`
+    const handleEnd = (event) => {
+      utteranceRef.current = null;
+      setSpeaking(false);
+      setPaused(false);
+    };
+    utterance.onend = handleEnd;
+    utterance.onerror = handleEnd;
+
+    // Word boundary logic for highlight sync
+    utterance.onboundary = (event) => {
+      if (event.name === 'word') {
+        // True offset is global
+        currentPositionRef.current = accumulatedLength + utterStartPos + event.charIndex;
+        playbackContextRef.current.wordIndex = currentPositionRef.current;
+        lastWordRef.current =
+          speakText.substring(event.charIndex, speakText.indexOf(' ', event.charIndex) !== -1
+            ? speakText.indexOf(' ', event.charIndex)
+            : speakText.length).trim();
+
+        currentWordDataRef.current = {
+          word: lastWordRef.current,
+          charIndex: currentPositionRef.current,
+          startTime: performance.now(),
+        };
+
+        if (wordBoundaryListenersRef.current.length > 0) {
+          const wordData = {
+            word: lastWordRef.current,
+            charIndex: currentPositionRef.current,
+            wordPosition: {
+              start: currentPositionRef.current,
+              end: currentPositionRef.current + lastWordRef.current.length,
+            },
+            text: text,
+            timestamp: performance.now(),
+          };
+          wordBoundaryListenersRef.current.forEach(listener => {
+            try {
+              listener(wordData);
+            } catch (error) {
+              console.error('Error in word boundary listener:', error);
+            }
+          });
+        }
+      }
+    };
+
+    // Store references for control APIs
+    utteranceRef.current = utterance;
+    currentTextRef.current = chunkText; // for legacy API fallback support
+    currentPositionRef.current = accumulatedLength + utterStartPos;
+
+    playbackContextRef.current.chunkIndex = targetChunkIndex;
+    playbackContextRef.current.wordIndex = accumulatedLength + utterStartPos;
+    // (App container must update these if it wants custom info.)
+
+    setSpeaking(true);
+    setPaused(false);
+    window.speechSynthesis.speak(utterance);
+  }
   
   /**
    * Set the current playback context (page and chunk information)
@@ -323,6 +460,8 @@ const useSpeechSynthesis = () => {
     voices,
     setVoice,
     speakFromPosition,
+    // PUBLIC_INTERFACE
+    speakFromGlobalPosition,
     currentPosition: currentPositionRef.current,
     setPlaybackContext,
     getPlaybackContext,
