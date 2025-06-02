@@ -590,6 +590,20 @@ function App() {
     }
   };
 
+  // Helper to get the most up-to-date globalPosition (from speech context or fallback)
+  const getCurrentAudioGlobalPosition = () => {
+    // Try to get currentPosition from useSpeechSynthesis playback context, fallback to lastPositionRef
+    const synthContext = getPlaybackContext?.() || {};
+    // Prefer playbackContext.currentPosition if it's a number and nonzero/valid
+    if (typeof synthContext.currentPosition === "number" && synthContext.currentPosition >= 0) {
+      return synthContext.currentPosition;
+    }
+    if (lastPositionRef.current && typeof lastPositionRef.current.globalPosition === "number") {
+      return lastPositionRef.current.globalPosition;
+    }
+    return 0;
+  };
+
   // Handle voice change: resumes playback at the same global position using new voice, with state sync
   const handleVoiceChange = (e) => {
     const voiceIndex = parseInt(e.target.value);
@@ -597,15 +611,18 @@ function App() {
 
     if (voices && voices.length > 0) {
       setVoice(voices[voiceIndex]);
-      // Resume playback at current global char index with new voice
-      if (activeDocument && documentText && isPlaying && typeof lastPositionRef.current.globalPosition === "number") {
+      // Before resuming, capture most precise spoken char position
+      const globalPos = getCurrentAudioGlobalPosition();
+      if (activeDocument && documentText && isPlaying && typeof globalPos === "number") {
         cancel();
-        speakFromGlobalPosition(lastPositionRef.current.globalPosition, {
+        speakFromGlobalPosition(globalPos, {
           text: documentText,
           chunks: textChunks,
           voice: voices[voiceIndex],
           rate: playbackRate
         });
+        // Important: update lastPositionRef too for bookmarks and other resume
+        lastPositionRef.current.globalPosition = globalPos;
         setIsPlaying(true);
       }
     }
@@ -615,15 +632,17 @@ function App() {
   const handlePlaybackRateChange = (e) => {
     const newRate = parseFloat(e.target.value);
     setPlaybackRate(newRate);
-    // If currently speaking and not paused, resume at the correct global char position with updated rate
-    if (activeDocument && documentText && isPlaying && typeof lastPositionRef.current.globalPosition === "number") {
+    // Always use the most current position to avoid resuming from beginning of chunk
+    const globalPos = getCurrentAudioGlobalPosition();
+    if (activeDocument && documentText && isPlaying && typeof globalPos === "number") {
       cancel();
-      speakFromGlobalPosition(lastPositionRef.current.globalPosition, {
+      speakFromGlobalPosition(globalPos, {
         text: documentText,
         chunks: textChunks,
         voice: voices[selectedVoiceIndex],
         rate: newRate
       });
+      lastPositionRef.current.globalPosition = globalPos;
       setIsPlaying(true);
     }
   };
