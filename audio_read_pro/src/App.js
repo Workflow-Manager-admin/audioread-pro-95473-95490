@@ -626,6 +626,10 @@ function App() {
 
   // Resume from bookmarks accurately using global char index and voice/speed
   const jumpToBookmark = (bookmark) => {
+    // Isolate context before jumping anywhere
+    clearAllHighlights();
+    cancel();
+
     // If switching documents, let document selection handle position
     if (activeDocument && bookmark.documentId && bookmark.documentId !== activeDocument.id) {
       setActiveDocumentById(bookmark.documentId);
@@ -635,8 +639,6 @@ function App() {
     // Go to correct page visually, but don't start playback yet
     handlePageChange(bookmark.page, false);
     setCurrentChunkIndex(bookmark.chunk);
-
-    if (speaking) cancel();
 
     // Use globalPosition from bookmark for precise resume
     if (typeof bookmark.globalPosition === "number" && textChunks.length > bookmark.chunk) {
