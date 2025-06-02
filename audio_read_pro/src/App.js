@@ -743,6 +743,14 @@ function App() {
   
   // Handle word boundary events for auto-scrolling & precise highlighting (robust and unambiguous)
   const handleWordBoundary = useCallback((wordData) => {
+    // Defensive: handle stuck boundary/missing/onerror "stuck" type signal from hook (clears all highlights and resets playback state)
+    if (wordData && wordData.type === "stuck") {
+      clearAllHighlights();
+      setIsPlaying(false);
+      // Optionally, set error state for UI: setError(wordData.reason || "Speech error");
+      return;
+    }
+
     if (!wordData || typeof wordData.charIndex !== "number" || !wordData.word) return;
 
     // --- All mapping centralized: always use splitTextToWordSpans for TTS charIndex-to-word-span mapping ---
