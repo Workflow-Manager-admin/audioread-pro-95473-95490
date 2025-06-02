@@ -319,6 +319,9 @@ const useSpeechSynthesis = () => {
       return;
     }
 
+    // Defensive: clear stale timers before starting anything new
+    clearSpeechTimeouts();
+
     const { text, chunks, voice, rate, pitch, volume } = options;
 
     // --- Canonical word boundary alignment (never skip first word, always start at true word offset) ---
@@ -414,18 +417,48 @@ const useSpeechSynthesis = () => {
     // Prevent duplicate boundary events by tracking offsets
     let emittedOffsets = new Set();
 
+    // Defensive: stuck/onend/missing-boundary watcher
+    const handleStuck = (reason = "Missing boundary/onend") => {
+      utteranceRef.current = null;
+      setSpeaking(false);
+      setPaused(false);
+      emittedOffsets.clear();
+      clearSpeechTimeouts();
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      wordBoundaryListenersRef.current.forEach(listener => {
+        try { listener({ type: "stuck", reason }); } catch {}
+      });
+    };
+
     // End and error handler
     const handleEnd = () => {
       utteranceRef.current = null;
       setSpeaking(false);
       setPaused(false);
       emittedOffsets.clear();
+      clearSpeechTimeouts();
     };
     utterance.onend = handleEnd;
     utterance.onerror = handleEnd;
 
+    // Defensive stuck timer (in case neither onend nor boundary fires)
+    stuckSpeechTimeoutRef.current = setTimeout(() => {
+      // If utterance still present after N seconds, forcibly clean up
+      if (utteranceRef.current) {
+        handleStuck("Utterance stuck over " + STUCK_SPEECH_TIMEOUT_MS);
+      }
+    }, STUCK_SPEECH_TIMEOUT_MS);
+
     // Always fire boundary with canonical mapping (robustly use splitTextToWordSpans)
     utterance.onboundary = (event) => {
+      // Reset missing-boundary detection upon each word boundary
+      if (boundaryTimeoutRef.current) clearTimeout(boundaryTimeoutRef.current);
+      boundaryTimeoutRef.current = setTimeout(() => {
+        handleStuck("No onboundary for over " + BOUNDARY_TIMEOUT_MS + "ms (speakFromGlobalPosition)");
+      }, BOUNDARY_TIMEOUT_MS);
+
       if (event.name === 'word') {
         const localCharIdx = event.charIndex;
         const globalIndex = accumulatedLength + utterStart + localCharIdx;
