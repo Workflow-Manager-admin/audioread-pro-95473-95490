@@ -84,9 +84,28 @@ const useSpeechSynthesis = () => {
     return utterance;
   }
 
+  // Utility to check Speech API liveness (used for defensive sync fallback)
+  function isSpeechSynthesisActive() {
+    return (
+      typeof window !== 'undefined' &&
+      window.speechSynthesis &&
+      typeof window.speechSynthesis.speak === 'function' &&
+      typeof window.SpeechSynthesisUtterance === 'function'
+    );
+  }
+
   // Robust playback: watchdogs for stuck events, missing boundary, etc
   function speak(input, options = {}) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (!isSpeechSynthesisActive()) {
+      fatalSyncErrorRef.current = true;
+      setSpeaking(false);
+      setPaused(false);
+      // Fire sync error to listeners
+      wordBoundaryListenersRef.current.forEach(listener => {
+        try { listener({ type: "fatal-sync", reason: "SpeechSynthesis API unavailable" }); } catch {}
+      });
+      return;
+    }
 
     // Cancel any ongoing speech, clear any existing timeouts
     window.speechSynthesis.cancel();
