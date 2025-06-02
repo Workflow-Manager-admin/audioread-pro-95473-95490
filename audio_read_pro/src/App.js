@@ -14,13 +14,20 @@ import {
 import './App.css';
 
 /**
- * Initialize PDF.js worker to use local copy for compatibility with all environments.
+ * Initialize PDF.js worker using a robust method to ensure compatibility with Create React App and all environments.
  * (Fixes: Setting up fake worker failed error)
+ * Recommendation: Use require (in CommonJS/CRA) so worker is included in the bundle. 
  * See: https://github.com/wojtekmaj/react-pdf#setting-up-pdf-worker
  */
-if (typeof window !== 'undefined') {
-  // Use the local PDF worker relative to CRA's public/ folder
-  pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ''}/pdf.worker.mjs`;
+try {
+  // Use require for the worker bundled from node_modules (CRA/webpack compatible)
+  // Newer react-pdf/pdfjs-dist uses .min.js worker
+  // This works for both development and production, and prevents absolute/public path errors
+  // eslint-disable-next-line global-require
+  pdfjs.GlobalWorkerOptions.workerSrc = require('pdfjs-dist/build/pdf.worker.min.js');
+} catch (e) {
+  // Fallback for environments that do not support require (should not occur in CRA)
+  // Optionally log error, or leave as silent fail if non-critical
 }
 
 function App() {
