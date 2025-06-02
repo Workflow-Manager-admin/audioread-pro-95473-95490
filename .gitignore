@@ -52,3 +52,5 @@ yarn-error.log
 .serverless/
 .fusebox/
 .dynamodb/
+
+.file_activity_report.json
