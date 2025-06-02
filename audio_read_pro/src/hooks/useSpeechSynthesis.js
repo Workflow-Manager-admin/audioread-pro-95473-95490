@@ -495,6 +495,12 @@ const useSpeechSynthesis = () => {
     speakFromPosition,
     // PUBLIC_INTERFACE
     speakFromGlobalPosition,
+    /** 
+     * PUBLIC_INTERFACE
+     * Get the most recent global char position that was spoken (in audio), for true resume.
+     */
+    getCurrentGlobalPosition: () =>
+      typeof currentPositionRef.current === "number" ? currentPositionRef.current : 0,
     currentPosition: currentPositionRef.current,
     setPlaybackContext,
     getPlaybackContext,

@@ -71,7 +71,8 @@ function App() {
     speakFromGlobalPosition,
     setPlaybackContext,
     getPlaybackContext,
-    registerWordBoundaryListener
+    registerWordBoundaryListener,
+    getCurrentGlobalPosition
   } = useSpeechSynthesis();
   
   const {
@@ -590,14 +591,18 @@ function App() {
     }
   };
 
-  // Helper to get the most up-to-date globalPosition (from speech context or fallback)
+  // Helper to get the most up-to-date globalPosition (from hook's API if available)
   const getCurrentAudioGlobalPosition = () => {
-    // Try to get currentPosition from useSpeechSynthesis playback context, fallback to lastPositionRef
+    if (typeof getCurrentGlobalPosition === "function") {
+      const pos = getCurrentGlobalPosition();
+      if (typeof pos === "number" && pos >= 0) return pos;
+    }
+    // Try to get from playback context object (legacy fallback)
     const synthContext = getPlaybackContext?.() || {};
-    // Prefer playbackContext.currentPosition if it's a number and nonzero/valid
     if (typeof synthContext.currentPosition === "number" && synthContext.currentPosition >= 0) {
       return synthContext.currentPosition;
     }
+    // Else fallback to last position ref we manually tracked
     if (lastPositionRef.current && typeof lastPositionRef.current.globalPosition === "number") {
       return lastPositionRef.current.globalPosition;
     }
@@ -1003,6 +1008,18 @@ function App() {
           </div>
         </div>
       </div>
+      {showPlaybackReminder && activeDocument && (
+        <div style={{
+          background: '#ffeeba',
+          color: '#856404',
+          padding: '8px 20px',
+          borderTop: '1px solid #ffe8a1',
+          borderBottom: '1px solid #ffe8a1',
+          textAlign: 'center'
+        }}>
+          Playback stopped. Press <span style={{fontWeight:600}}>Play</span> to resume audio from your last position.
+        </div>
+      )}
     </div>
   );
 }
