@@ -604,15 +604,17 @@ function App() {
     return 0;
   };
 
-  // Handle voice change: resumes playback at the same global position using new voice, with state sync
+  // Handle voice change: If audio is playing, resume from last spoken word.
+  // If NOT playing, notify user to press play.
+  const [showPlaybackReminder, setShowPlaybackReminder] = useState(false);
   const handleVoiceChange = (e) => {
     const voiceIndex = parseInt(e.target.value);
     setSelectedVoiceIndex(voiceIndex);
 
     if (voices && voices.length > 0) {
       setVoice(voices[voiceIndex]);
-      // Before resuming, capture most precise spoken char position
       const globalPos = getCurrentAudioGlobalPosition();
+
       if (activeDocument && documentText && isPlaying && typeof globalPos === "number") {
         cancel();
         speakFromGlobalPosition(globalPos, {
@@ -621,18 +623,20 @@ function App() {
           voice: voices[voiceIndex],
           rate: playbackRate
         });
-        // Important: update lastPositionRef too for bookmarks and other resume
         lastPositionRef.current.globalPosition = globalPos;
         setIsPlaying(true);
+        setShowPlaybackReminder(false);
+      } else {
+        // If not playing, show UI reminder to play
+        setShowPlaybackReminder(true);
       }
     }
   };
 
-  // Handle playback rate change: resumes playback at the same global position using new rate, with state sync
+  // Handle playback rate change: If audio is playing, resumes at precisely last word.
   const handlePlaybackRateChange = (e) => {
     const newRate = parseFloat(e.target.value);
     setPlaybackRate(newRate);
-    // Always use the most current position to avoid resuming from beginning of chunk
     const globalPos = getCurrentAudioGlobalPosition();
     if (activeDocument && documentText && isPlaying && typeof globalPos === "number") {
       cancel();
@@ -644,6 +648,10 @@ function App() {
       });
       lastPositionRef.current.globalPosition = globalPos;
       setIsPlaying(true);
+      setShowPlaybackReminder(false);
+    } else if (!(activeDocument && documentText && isPlaying)) {
+      // If not playing now, show UI reminder to play
+      setShowPlaybackReminder(true);
     }
   };
   
