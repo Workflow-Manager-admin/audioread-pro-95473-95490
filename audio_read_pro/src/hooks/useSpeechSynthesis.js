@@ -231,17 +231,21 @@ const useSpeechSynthesis = () => {
 
   // PUBLIC_INTERFACE
   /**
-   * Speak from a global character position in the provided text, with options.
-   * This supports accurate resume when changing voices/rates or jumping anywhere, maintaining highlight sync.
-   * @param {number} globalCharIndex - Character offset in the document (absolute, not chunk-relative)
-   * @param {object} options - { voice, rate, pitch, volume, text, chunks }
-   *   - text: full document text (required)
-   *   - chunks: array of chunks (required, as produced by splitTextIntoChunks)
-   *   - voice: SpeechSynthesisVoice instance (optional)
-   *   - rate/pitch/volume: speech params (optional)
+   * Speak from a global character position in the provided document text, with chunk, voice, and speed control.
+   * Enables seamless resume and highlight sync when switching voices/speeds/positions.
+   * @param {number} globalCharIndex - Character offset in the entire document (absolute index)
+   * @param {object} options - {
+   *     text: string,           // full document text (required)
+   *     chunks: Array<string>,  // array of text chunks (required, as from splitTextIntoChunks)
+   *     voice: SpeechSynthesisVoice, // (optional) the voice to use
+   *     rate: number,           // (optional) playback speed
+   *     pitch: number,          // (optional) speech pitch
+   *     volume: number          // (optional) speech volume
+   *   }
    * @returns {void}
    */
   function speakFromGlobalPosition(globalCharIndex, options = {}) {
+    // Validate input
     if (
       typeof globalCharIndex !== 'number' ||
       !options.text ||
@@ -252,60 +256,63 @@ const useSpeechSynthesis = () => {
 
     const { text, chunks, voice, rate, pitch, volume } = options;
 
-    // Find which chunk contains the globalCharIndex
+    // Find target chunk and in-chunk position for globalCharIndex
     let accumulatedLength = 0;
     let targetChunkIndex = 0;
-    let inChunkIndex = 0;
+    let relativeIndex = 0;
     for (let i = 0; i < chunks.length; i++) {
-      const chunkLen = chunks[i].length;
+      const chunkLength = chunks[i].length;
       if (
         globalCharIndex >= accumulatedLength &&
-        globalCharIndex < accumulatedLength + chunkLen
+        globalCharIndex < accumulatedLength + chunkLength
       ) {
         targetChunkIndex = i;
-        inChunkIndex = globalCharIndex - accumulatedLength;
+        relativeIndex = globalCharIndex - accumulatedLength;
         break;
       }
-      accumulatedLength += chunkLen;
+      accumulatedLength += chunkLength;
+    }
+    // Edge case: if char index is beyond last, play from end
+    if (globalCharIndex >= accumulatedLength + (chunks[chunks.length - 1]?.length || 0)) {
+      targetChunkIndex = chunks.length - 1;
+      relativeIndex = Math.max(0, chunks[chunks.length - 1]?.length - 1);
     }
 
-    // Cancel any existing speech
+    // Cancel any active speech
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
 
-    // Prepare and configure utterance with the correct voice/speed
+    // Build utterance config
     const chunkText = chunks[targetChunkIndex];
-    const utterStartPos = inChunkIndex;
-    const speakText = chunkText.substring(utterStartPos);
+    const utterStart = relativeIndex;
+    const textToSpeak = chunkText.substring(utterStart);
 
-    // Select voice
-    let usedVoice = null;
+    // Choose voice
+    let useVoice = null;
     if (voice) {
-      usedVoice = voice;
+      useVoice = voice;
       selectedVoiceRef.current = voice;
     } else if (selectedVoiceRef.current) {
-      usedVoice = selectedVoiceRef.current;
+      useVoice = selectedVoiceRef.current;
     }
 
-    const utterOptions = {
+    // Compile utterance speech options
+    const utterOpts = {
       rate: rate ?? 1,
       pitch: pitch ?? 1,
       volume: volume ?? 1,
     };
 
-    // Construct custom utterance so .voice can be reliably set
-    const utterance = new SpeechSynthesisUtterance(speakText);
-    // These must be set via property, not constructor param
-    if (usedVoice) utterance.voice = usedVoice;
-    Object.keys(utterOptions).forEach(optKey => {
-      if (optKey in utterance && utterOptions[optKey] !== undefined) {
-        utterance[optKey] = utterOptions[optKey];
-      }
+    // Create utterance and assign settings
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    if (useVoice) utterance.voice = useVoice;
+    Object.keys(utterOpts).forEach(key => {
+      if (utterOpts[key] !== undefined && key in utterance) utterance[key] = utterOpts[key];
     });
 
-    // Set up onend/onerror highlight-cancel handlers like in `speak`
-    const handleEnd = (event) => {
+    // End handler: update speaking flags
+    const handleEnd = () => {
       utteranceRef.current = null;
       setSpeaking(false);
       setPaused(false);
@@ -313,53 +320,55 @@ const useSpeechSynthesis = () => {
     utterance.onend = handleEnd;
     utterance.onerror = handleEnd;
 
-    // Word boundary logic for highlight sync
+    // Word boundary event: synchronize highlight using global char index
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
-        // True offset is global
-        currentPositionRef.current = accumulatedLength + utterStartPos + event.charIndex;
-        playbackContextRef.current.wordIndex = currentPositionRef.current;
-        lastWordRef.current =
-          speakText.substring(event.charIndex, speakText.indexOf(' ', event.charIndex) !== -1
-            ? speakText.indexOf(' ', event.charIndex)
-            : speakText.length).trim();
-
+        const globalIndex = accumulatedLength + utterStart + event.charIndex;
+        currentPositionRef.current = globalIndex;
+        playbackContextRef.current.wordIndex = globalIndex;
+        let spokenWord = '';
+        // Extract the spoken word if possible
+        if (typeof event.charIndex === 'number') {
+          const searchSpace = textToSpeak.substring(event.charIndex);
+          spokenWord = searchSpace.split(/[\s]+/)[0] || '';
+          lastWordRef.current = spokenWord;
+        }
         currentWordDataRef.current = {
           word: lastWordRef.current,
-          charIndex: currentPositionRef.current,
+          charIndex: globalIndex,
           startTime: performance.now(),
         };
-
+        // Notify highlight listeners
         if (wordBoundaryListenersRef.current.length > 0) {
           const wordData = {
             word: lastWordRef.current,
-            charIndex: currentPositionRef.current,
+            charIndex: globalIndex,
             wordPosition: {
-              start: currentPositionRef.current,
-              end: currentPositionRef.current + lastWordRef.current.length,
+              start: globalIndex,
+              end: globalIndex + (lastWordRef.current ? lastWordRef.current.length : 0),
             },
-            text: text,
+            text,
             timestamp: performance.now(),
           };
           wordBoundaryListenersRef.current.forEach(listener => {
             try {
               listener(wordData);
-            } catch (error) {
-              console.error('Error in word boundary listener:', error);
+            } catch (err) {
+              // eslint-disable-next-line no-console
+              console.error('Error in word boundary listener:', err);
             }
           });
         }
       }
     };
 
-    // Store references for control APIs
+    // Store control refs for API
     utteranceRef.current = utterance;
-    currentTextRef.current = chunkText; // for legacy API fallback support
-    currentPositionRef.current = accumulatedLength + utterStartPos;
+    currentTextRef.current = chunkText;
+    currentPositionRef.current = accumulatedLength + utterStart;
 
     playbackContextRef.current.chunkIndex = targetChunkIndex;
-    playbackContextRef.current.wordIndex = accumulatedLength + utterStartPos;
-    // (App container must update these if it wants custom info.)
+    playbackContextRef.current.wordIndex = accumulatedLength + utterStart;
 
     setSpeaking(true);
     setPaused(false);
