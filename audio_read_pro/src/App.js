@@ -19,8 +19,12 @@ import './App.css';
  * This method ensures compatibility with both development and production React builds.
  * See: https://github.com/wojtekmaj/react-pdf#setting-up-pdf-worker
  */
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.js';
-pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+/**
+ * PDF.js worker initialization for react-pdf (pdfjs-dist v4.x, CRA/Webpack compatible).
+ * Use the entry JS file (not the min.js) via require, as recommended for commonjs/bundlers.
+ * No public, CDN, or window logic required.
+ */
+pdfjs.GlobalWorkerOptions.workerSrc = require('pdfjs-dist/build/pdf.worker.entry');
 
 function App() {
   // Core document state
