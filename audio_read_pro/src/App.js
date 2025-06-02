@@ -648,29 +648,67 @@ function App() {
 
     const pageStartPosition = docPages[pageIdx]?.startPosition || 0;
     const relativeCharIndex = wordData.charIndex - pageStartPosition;
-    // Word key for highlight lookup
+    // Robust approach for word key: lower-case, trim, no leading/trailing whitespace, safe to falling-back
     let wordKey = `word-${relativeCharIndex}-${wordData.word}`;
+    wordKey = wordKey.replace(/\s+/g, '').toLowerCase();
 
-    // Find the closest matching word element robustly
+    // Attempt direct match first
     let wordElementId = wordElementsRef.current[wordKey];
-    if (!wordElementId) {
-      // Greedy fallback: find a nearby key with the same word, allow slightly larger window (for hyphens etc)
-      const altKey = Object.keys(wordElementsRef.current).find(key =>
-        key.endsWith(`-${wordData.word}`) &&
-        Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 12 // allow bigger slop
-      );
-      wordElementId = (altKey && wordElementsRef.current[altKey]) || `word-${relativeCharIndex}-${wordData.word}`;
-    }
-    let wordElement = document.getElementById(wordElementId);
+    let wordElement = wordElementId ? document.getElementById(wordElementId) : null;
 
-    // As an ultimate fallback, if not found but word has length > 2, search by just charIndex
-    if (!wordElement && wordData.word.length > 2) {
-      // Get any word at the approximate position (for words next to punctuation)
-      const altKey = Object.keys(wordElementsRef.current).find(key =>
-        Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 3
-      );
-      wordElementId = (altKey && wordElementsRef.current[altKey]) || wordElementId;
-      wordElement = document.getElementById(wordElementId);
+    // Fallback: try nearby key with same word, allowing for minor index imprecision (e.g. punctuation)
+    if (!wordElement) {
+      const possibleKeys = Object.entries(wordElementsRef.current);
+      // Search for key where word matches ignoring case, and char index within 5 of target
+      let bestDistance = Number.MAX_SAFE_INTEGER, candidateId = null;
+      for (const [key, id] of possibleKeys) {
+        const match = key.match(/^word-(\-?\d+)-(.+)$/);
+        if (match) {
+          const charIdx = parseInt(match[1]);
+          const w = match[2];
+          if (
+            w.replace(/\s+/g, '').toLowerCase() === wordData.word.replace(/\s+/g, '').toLowerCase() &&
+            Math.abs(charIdx - relativeCharIndex) < 7
+          ) {
+            const dist = Math.abs(charIdx - relativeCharIndex);
+            if (dist < bestDistance) {
+              bestDistance = dist;
+              candidateId = id;
+            }
+          }
+        }
+      }
+      if (candidateId) {
+        wordElementId = candidateId;
+        wordElement = document.getElementById(wordElementId);
+      }
+    }
+
+    // As a last resort: just find a span in the page with text content matching and closest to the right offset.
+    if (!wordElement) {
+      const docContent = documentContentRef.current;
+      if (docContent) {
+        // Find all span elements
+        const spans = docContent.querySelectorAll('span.clickable-word');
+        let bestMatch = null;
+        let bestDist = Number.MAX_SAFE_INTEGER;
+        spans.forEach(el => {
+          const elWord = (el.textContent || '').replace(/\s+/g, '').toLowerCase();
+          if (elWord === wordData.word.replace(/\s+/g, '').toLowerCase()) {
+            // Try matching offset if possible
+            const offset = Number(el.getAttribute('data-offset'));
+            const dist = Math.abs(offset - wordData.charIndex);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestMatch = el;
+            }
+          }
+        });
+        if (bestMatch) {
+          wordElement = bestMatch;
+          wordElementId = bestMatch.id || null;
+        }
+      }
     }
 
     // Clean up previous highlight
