@@ -127,34 +127,41 @@ const useSpeechSynthesis = () => {
     utteranceToSpeak.onboundary = (event) => {
       if (event.name === 'word') {
         currentPositionRef.current = event.charIndex;
-        
-        // Store information about the current word being spoken
+
         if (event.charIndex < currentTextRef.current.length) {
-          // Extract the current word
+          // Determine the actual word using event.charIndex and look ahead/back for best match
           const text = currentTextRef.current;
-          const wordStart = event.charIndex;
-          const nextSpace = text.indexOf(' ', wordStart);
-          const wordEnd = nextSpace !== -1 ? nextSpace : text.length;
-          const currentWord = text.substring(wordStart, wordEnd).trim();
+          // Greedy match for a word using regex, anchored at pos
+          let match = text.slice(event.charIndex).match(/^([\w'-]+)/);
+          let currentWord = "";
+          let wordStart = event.charIndex;
+          let wordEnd = event.charIndex;
+          if (match && match[1]) {
+            currentWord = match[1];
+            wordEnd = wordStart + currentWord.length;
+          } else {
+            // fallback: try to get the character at index if not whitespace/punct
+            const char = text.charAt(event.charIndex);
+            if (char && /\w/.test(char)) {
+              currentWord = char;
+              wordEnd = wordStart + 1;
+            }
+          }
           
           if (currentWord) {
             lastWordRef.current = currentWord;
-            
-            // Update word index in context
             playbackContextRef.current.wordIndex = event.charIndex;
-            
-            // Update current word data with timing information
             currentWordDataRef.current = {
               word: currentWord,
-              charIndex: event.charIndex,
+              charIndex: wordStart,
               startTime: performance.now()
             };
-            
-            // Notify all registered word boundary listeners
+
+            // Notify word boundary listeners with improved indices
             if (wordBoundaryListenersRef.current.length > 0) {
               const wordData = {
                 word: currentWord,
-                charIndex: event.charIndex,
+                charIndex: wordStart,
                 wordPosition: {
                   start: wordStart,
                   end: wordEnd
@@ -162,11 +169,12 @@ const useSpeechSynthesis = () => {
                 text: text,
                 timestamp: performance.now()
               };
-              
+
               wordBoundaryListenersRef.current.forEach(listener => {
                 try {
                   listener(wordData);
                 } catch (error) {
+                  // eslint-disable-next-line no-console
                   console.error('Error in word boundary listener:', error);
                 }
               });
