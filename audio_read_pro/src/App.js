@@ -948,8 +948,189 @@ function App() {
 
   return (
     <div className="app">
-      {/* ... rest of your JSX ... */}
-      {/* (omitted here in the diff for brevity; no structural change) */}
+      <div className="container">
+        <div className="document-view">
+          {activeDocument ? (
+            <>
+              <div 
+                ref={documentContentRef} 
+                className={`document-content ${speaking ? 'auto-scrolling' : ''}`}
+              >
+                {renderTextWithClickableWords()}
+              </div>
+              <div className="page-navigation">
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    clearAllHighlights();
+                    handlePageChange(Math.max(1, currentPage - 1));
+                  }}
+                  disabled={currentPage === 1}
+                >
+                  Previous Page
+                </button>
+                <span>Page {currentPage} of {totalPages}</span>
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    clearAllHighlights();
+                    handlePageChange(Math.min(totalPages, currentPage + 1));
+                  }}
+                  disabled={currentPage === totalPages}
+                >
+                  Next Page
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="document-placeholder">
+              <p>Select a document from your library or add a new one to get started</p>
+            </div>
+          )}
+        </div>
+
+        <div className="controls-panel">
+          {/* Document Library Component */}
+          <DocumentLibrary
+            documents={documents}
+            activeDocument={activeDocument}
+            onAddDocument={handleAddDocument}
+            onRemoveDocument={handleRemoveDocument}
+            onSelectDocument={handleSelectDocument}
+            loading={loadingDocuments}
+          />
+          
+          {loadingDocuments && (
+            <div className="loading-indicator">
+              <p>Loading documents...</p>
+            </div>
+          )}
+
+          {bookmarks.length > 0 && (
+            <div className="bookmark-list">
+              <h3>Bookmarks</h3>
+              {bookmarks.map((bookmark, index) => (
+                <div 
+                  key={index} 
+                  className="bookmark-item"
+                  onClick={() => jumpToBookmark(bookmark)}
+                >
+                  <span>Page {bookmark.page}</span>
+                  <span>{new Date(bookmark.timestamp).toLocaleTimeString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(error || documentError) && (
+            <div className="error-message">
+              {error || documentError}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Fixed Audio Controls Bar */}
+      <div className="audio-controls-bar">
+        <div className="playback-main-controls">
+          <button 
+            className="btn" 
+            onClick={handlePrevious} 
+            disabled={!activeDocument || currentChunkIndex === 0}
+          >
+            <FaBackward />
+          </button>
+          
+          <button 
+            className={`btn ${isPlaying ? 'btn-secondary' : ''}`} 
+            onClick={handlePlayPause} 
+            disabled={!activeDocument}
+          >
+            {speaking && !paused ? <FaPause /> : <FaPlay />}
+          </button>
+          
+          <button 
+            className="btn" 
+            onClick={handleNext} 
+            disabled={!activeDocument || currentChunkIndex === textChunks.length - 1}
+          >
+            <FaForward />
+          </button>
+          
+          <button 
+            className="btn btn-secondary" 
+            onClick={addBookmark} 
+            disabled={!activeDocument}
+          >
+            <FaBookmark />
+          </button>
+        </div>
+        
+        <div className="page-info">
+          {activeDocument && <span>Page {currentPage} of {totalPages}</span>}
+        </div>
+        
+        <div className="playback-settings">
+          <div className="voice-control">
+            <select 
+              className="select-control"
+              onChange={handleVoiceChange}
+              value={selectedVoiceIndex}
+              disabled={!activeDocument}
+            >
+              {voices && voices.length > 0 ? (
+                voices.map((voice, index) => (
+                  <option key={index} value={index}>
+                    {voice.name} ({voice.lang})
+                  </option>
+                ))
+              ) : (
+                <option value="">Loading voices...</option>
+              )}
+            </select>
+          </div>
+          
+          <div className="speed-control-container">
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={playbackRate}
+              onChange={handlePlaybackRateChange}
+              className="speed-control"
+              disabled={!activeDocument}
+            />
+            <div>{playbackRate}x</div>
+          </div>
+        </div>
+      </div>
+      {showPlaybackReminder && activeDocument && (
+        <div
+          className="playback-reminder-banner"
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 'var(--controls-bar-height)',
+            zIndex: 1200,
+            background: '#ffeeba',
+            color: '#856404',
+            padding: '12px 20px',
+            borderTop: '1px solid #ffe8a1',
+            borderBottom: '1px solid #ffe8a1',
+            textAlign: 'center',
+            fontSize: '1.06rem',
+            fontWeight: 500,
+            boxShadow: '0 -1px 6px rgba(0,0,0,0.04)'
+          }}
+          aria-live="polite"
+        >
+          <span>
+            Playback is paused. After changing <b>voice</b> or <b>speed</b>, press <span style={{fontWeight:600}}>Play</span> to start or resume audio from your last position.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
