@@ -533,6 +533,26 @@ const useSpeechSynthesis = () => {
     return currentWordDataRef.current;
   }, []);
 
+  // PUBLIC_INTERFACE
+  /**
+   * Reset all speech-related context and refs. This cancels speech, clears listeners and resets state.
+   * Usage: Call on navigation or cleanup to prevent stuck highlights or ghost audio.
+   */
+  function clearAllSpeechContext() {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    utteranceRef.current = null;
+    currentTextRef.current = '';
+    currentPositionRef.current = 0;
+    lastWordRef.current = '';
+    selectedVoiceRef.current = null;
+    playbackContextRef.current = { chunkIndex: 0, pageIndex: 0, wordIndex: 0 };
+    wordBoundaryListenersRef.current = [];
+    setSpeaking(false);
+    setPaused(false);
+  }
+
   return {
     speak,
     speaking,
@@ -545,6 +565,7 @@ const useSpeechSynthesis = () => {
     speakFromPosition,
     // PUBLIC_INTERFACE
     speakFromGlobalPosition,
+    clearAllSpeechContext,
     /** 
      * PUBLIC_INTERFACE
      * Get the most recent global char position that was spoken (in audio), for true resume.
