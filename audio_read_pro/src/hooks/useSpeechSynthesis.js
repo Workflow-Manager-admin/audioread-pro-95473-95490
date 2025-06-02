@@ -331,29 +331,45 @@ const useSpeechSynthesis = () => {
     // Word boundary event: synchronize highlight using global char index
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
-        const globalIndex = accumulatedLength + utterStart + event.charIndex;
-        currentPositionRef.current = globalIndex;
-        playbackContextRef.current.wordIndex = globalIndex;
-        let spokenWord = '';
-        // Extract the spoken word if possible
-        if (typeof event.charIndex === 'number') {
-          const searchSpace = textToSpeak.substring(event.charIndex);
-          spokenWord = searchSpace.split(/[\s]+/)[0] || '';
-          lastWordRef.current = spokenWord;
+        // Robustly calculate the global character index and spoken word for accurate highlight sync.
+        const localCharIdx = event.charIndex;
+        const globalIndex = accumulatedLength + utterStart + localCharIdx;
+
+        // Extract the word using the actual uttered text segment.
+        let wordMatch = '';
+        let searchText = textToSpeak.slice(localCharIdx);
+        // Match word characters robustly, allowing for apostrophes/hyphens.
+        const match = searchText.match(/^([\w'-]+)/);
+        if (match && match[1]) {
+          wordMatch = match[1];
+        } else {
+          // as fallback, try to grab one char if not whitespace
+          const charAt = searchText.charAt(0);
+          if (charAt && /\w/.test(charAt)) {
+            wordMatch = charAt;
+          }
         }
+        // Defensive fallback to previous word if no match at all
+        if (!wordMatch) wordMatch = lastWordRef.current || '';
+
+        // Store for downstream listeners
+        lastWordRef.current = wordMatch;
+
+        // For rare TTS sync quirks, keep currentPosition updated accurately
+        currentPositionRef.current = globalIndex;
+
         currentWordDataRef.current = {
-          word: lastWordRef.current,
+          word: wordMatch,
           charIndex: globalIndex,
           startTime: performance.now(),
         };
-        // Notify highlight listeners
         if (wordBoundaryListenersRef.current.length > 0) {
           const wordData = {
-            word: lastWordRef.current,
+            word: wordMatch,
             charIndex: globalIndex,
             wordPosition: {
               start: globalIndex,
-              end: globalIndex + (lastWordRef.current ? lastWordRef.current.length : 0),
+              end: globalIndex + wordMatch.length,
             },
             text,
             timestamp: performance.now(),
