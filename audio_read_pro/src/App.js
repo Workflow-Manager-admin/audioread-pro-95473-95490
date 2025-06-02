@@ -442,20 +442,30 @@ function App() {
     saveReadingPosition();
   };
 
-  // Page navigation: synchronize audio from start of new page using global char index API
+  // Page navigation: synchronize audio/highlight state from new page
+  // PUBLIC_INTERFACE
   const handlePageChange = (newPage, shouldSpeak = true) => {
     if (!activeDocument || !docPages.length || newPage < 1 || newPage > docPages.length) return;
+
+    // --- Defensive: clear highlight state and audio context on every page navigation ---
+    clearAllHighlights();
+    wordElementsRef.current = {};
+    currentWordRef.current = null;
+
+    cancel();
+    setIsPlaying(false);
 
     setCurrentPage(newPage);
     if (docPages[newPage - 1]) setCurrentPageText(docPages[newPage - 1].text);
 
-    // Get page start position (global char index)
+    // Get true start for this page (global character index)
     const pageStartPosition = docPages[newPage - 1]?.startPosition || 0;
 
-    // Find which chunk contains this global char position
+    // Find which chunk and relative word this position is, for TTS-context sync
     const { chunkIndex, relativePosition } = findChunkByPosition(pageStartPosition, textChunks);
     setCurrentChunkIndex(chunkIndex);
 
+    // Reset playback state/ref exactly to the start of this page
     lastPositionRef.current = {
       page: newPage,
       chunk: chunkIndex,
@@ -463,8 +473,16 @@ function App() {
       globalPosition: pageStartPosition
     };
 
+    setPlaybackContext({
+      chunkIndex,
+      pageIndex: newPage - 1,
+      wordIndex: relativePosition
+    });
+
     if (shouldSpeak) {
-      if (speaking) cancel();
+      // Always clear before speaking new page
+      clearAllHighlights();
+      cancel();
       speakFromGlobalPosition(pageStartPosition, {
         text: documentText,
         chunks: textChunks,
@@ -473,12 +491,6 @@ function App() {
       });
       setIsPlaying(true);
     }
-
-    setPlaybackContext({
-      chunkIndex,
-      pageIndex: newPage - 1,
-      wordIndex: relativePosition
-    });
 
     saveReadingPosition();
   };
@@ -871,7 +883,10 @@ function App() {
               <div className="page-navigation">
                 <button 
                   className="btn" 
-                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  onClick={() => {
+                    clearAllHighlights();
+                    handlePageChange(Math.max(1, currentPage - 1));
+                  }}
                   disabled={currentPage === 1}
                 >
                   Previous Page
@@ -879,7 +894,10 @@ function App() {
                 <span>Page {currentPage} of {totalPages}</span>
                 <button 
                   className="btn" 
-                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                  onClick={() => {
+                    clearAllHighlights();
+                    handlePageChange(Math.min(totalPages, currentPage + 1));
+                  }}
                   disabled={currentPage === totalPages}
                 >
                   Next Page
