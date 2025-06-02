@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useSpeechSynthesis from './hooks/useSpeechSynthesis';
 import useDocumentLibrary from './hooks/useDocumentLibrary';
+
+/**
+ * IMPLEMENTATION PLAN:
+ * 1. Always reset highlight state and playback context when navigating to a new page.
+ * 2. On next/prev page navigation, playback must start at the true first word (first global char position) of that page.
+ * 3. On page change (manual or by chunk jump), reset all highlight state before rendering.
+ * 4. Use robust mapping from global position to page and span for highlighting (exclusive end for page, fixes off-by-one).
+ * 5. Ensure all 'speakFromGlobalPosition' invocations for new page start use the precise page.startPosition.
+ * 6. Defensive: On all navigation (manual and code-driven), call clearAllHighlights().
+ * 7. Ensure handlers and UI always treat page boundary as an atomic navigation reset for playback/highlight.
+ */
 import DocumentLibrary from './components/DocumentLibrary';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
 import { pdfjs } from 'react-pdf';
