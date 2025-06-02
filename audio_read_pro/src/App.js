@@ -316,15 +316,19 @@ function App() {
     if (!activeDocument || currentChunkIndex >= textChunks.length - 1) return;
 
     const nextChunkIndex = currentChunkIndex + 1;
-    setCurrentChunkIndex(nextChunkIndex);
 
-    // Find proper next page, update UI if needed
+    let nextPage = currentPage;
     if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[nextChunkIndex]) {
-      const nextPage = chunkToPageMapping.chunkToPage[nextChunkIndex];
+      nextPage = chunkToPageMapping.chunkToPage[nextChunkIndex];
       if (nextPage !== currentPage) {
-        handlePageChange(nextPage, false); // Don't auto-start speaking
+        clearAllHighlights(); // Always clean highlights upon page jump
+        handlePageChange(nextPage, true); // Auto-start speaking at true start
+        return; // handlePageChange performs all state/audio resets
       }
     }
+
+    setCurrentChunkIndex(nextChunkIndex);
+    clearAllHighlights();
 
     // Cancel existing playback
     if (speaking) cancel();
@@ -339,7 +343,7 @@ function App() {
     });
 
     lastPositionRef.current = {
-      page: currentPage,
+      page: nextPage,
       chunk: nextChunkIndex,
       position: 0,
       globalPosition: chunkStart
@@ -347,7 +351,7 @@ function App() {
 
     setPlaybackContext({
       chunkIndex: nextChunkIndex,
-      pageIndex: currentPage - 1,
+      pageIndex: nextPage - 1,
       wordIndex: 0
     });
 
@@ -360,15 +364,19 @@ function App() {
     if (!activeDocument || currentChunkIndex <= 0) return;
 
     const prevChunkIndex = currentChunkIndex - 1;
-    setCurrentChunkIndex(prevChunkIndex);
 
-    // Page navigation if chunk change moves to a different page
+    let prevPage = currentPage;
     if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[prevChunkIndex]) {
-      const prevPage = chunkToPageMapping.chunkToPage[prevChunkIndex];
+      prevPage = chunkToPageMapping.chunkToPage[prevChunkIndex];
       if (prevPage !== currentPage) {
-        handlePageChange(prevPage, false); // Don't auto-start speaking
+        clearAllHighlights();
+        handlePageChange(prevPage, true);
+        return;
       }
     }
+
+    setCurrentChunkIndex(prevChunkIndex);
+    clearAllHighlights();
 
     // Cancel any existing playback
     if (speaking) cancel();
@@ -383,7 +391,7 @@ function App() {
     });
 
     lastPositionRef.current = {
-      page: currentPage,
+      page: prevPage,
       chunk: prevChunkIndex,
       position: 0,
       globalPosition: chunkStart
@@ -391,7 +399,7 @@ function App() {
 
     setPlaybackContext({
       chunkIndex: prevChunkIndex,
-      pageIndex: currentPage - 1,
+      pageIndex: prevPage - 1,
       wordIndex: 0
     });
 
