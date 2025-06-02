@@ -20,11 +20,11 @@ import './App.css';
  * See: https://github.com/wojtekmaj/react-pdf#setting-up-pdf-worker
  */
 /**
- * PDF.js worker initialization for react-pdf (pdfjs-dist v4.x, CRA/Webpack compatible).
- * Use the entry JS file (not the min.js) via require, as recommended for commonjs/bundlers.
- * No public, CDN, or window logic required.
+ * PDF.js worker initialization for react-pdf (universal solution for Create React App).
+ * Use the CDN-based workerSrc approach using the installed pdfjs version.
+ * Works for both local dev and production builds.
  */
-pdfjs.GlobalWorkerOptions.workerSrc = require('pdfjs-dist/build/pdf.worker.entry');
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 function App() {
   // Core document state
