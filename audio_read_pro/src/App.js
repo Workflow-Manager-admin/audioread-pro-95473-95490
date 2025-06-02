@@ -254,23 +254,24 @@ function App() {
   const handlePlayPause = () => {
     if (!activeDocument || !docPages.length) return;
 
-    // Robust context isolation: always clear audio & highlights before action
+    // Always reset context and highlights
     clearAllHighlights();
     clearAllSpeechContext();
 
     if (speaking) {
       if (paused) {
-        // Resume from the current exact global character position
+        // Resume playback at current canonical word boundary
         resume();
         setIsPlaying(true);
       } else {
-        // Save current position when pausing
+        // When pausing, save the most up-to-date char index
         const context = getPlaybackContext();
-        const currentPage = lastPositionRef.current.page;
-        const pageStartPosition = docPages[currentPage - 1]?.startPosition || 0;
-
+        // WordIndex may be a char offset due to mapping policy; normalize to exact canonical
+        const currentPageNum = lastPositionRef.current.page;
+        const pageStartPosition = docPages[currentPageNum - 1]?.startPosition || 0;
+        // Save canonical position (never skip first word)
         lastPositionRef.current = {
-          page: currentPage,
+          page: currentPageNum,
           chunk: currentChunkIndex,
           position: context.wordIndex,
           globalPosition: pageStartPosition + context.wordIndex
@@ -280,18 +281,18 @@ function App() {
         setIsPlaying(false);
       }
     } else if (textChunks.length > 0) {
-      // Always resume precisely using the new API, with voice/rate
-      speakFromGlobalPosition(
+      // Defensive: always use canonical start (never allow TTS to skip the first word)
+      const preciseGlobal =
         typeof lastPositionRef.current.globalPosition === "number"
           ? lastPositionRef.current.globalPosition
-          : 0,
-        {
-          text: documentText,
-          chunks: textChunks,
-          voice: voices[selectedVoiceIndex],
-          rate: playbackRate
-        }
-      );
+          : 0;
+      // Always start using canonical boundary (splitTextToWordSpans) logic
+      speakFromGlobalPosition(preciseGlobal, {
+        text: documentText,
+        chunks: textChunks,
+        voice: voices[selectedVoiceIndex],
+        rate: playbackRate
+      });
 
       setPlaybackContext({
         chunkIndex: currentChunkIndex,
