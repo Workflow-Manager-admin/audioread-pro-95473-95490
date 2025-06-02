@@ -14,12 +14,6 @@ import {
 import './App.css';
 
 /**
- * Initialize PDF.js worker for react-pdf.
- * Robust solution: import the worker directly from 'pdfjs-dist/build/pdf.worker.min.js'.
- * This method ensures compatibility with both development and production React builds.
- * See: https://github.com/wojtekmaj/react-pdf#setting-up-pdf-worker
- */
-/**
  * PDF.js worker initialization for react-pdf.
  * Use a statically served worker from the public/ directory to avoid CORS and dynamic import issues.
  * See: https://github.com/wojtekmaj/react-pdf#setting-up-pdf-worker
