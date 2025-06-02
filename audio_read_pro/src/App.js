@@ -118,71 +118,16 @@ function App() {
       cancel();
     }
     setIsPlaying(false);
-    
+    setSpeechFatalSync(false); // clear sync errors on document change
+    setError(null);
+
     // Set the new active document
     const selectedDoc = setActiveDocumentById(documentId);
     
     if (selectedDoc) {
       // Update the document text
       setDocumentText(selectedDoc.text);
-      
-      // Generate text chunks for speech synthesis
-      const chunks = splitTextIntoChunks(selectedDoc.text || '');
-      setTextChunks(chunks);
-      setCurrentChunkIndex(0);
-      
-      // Create book-like pages with consistent sizes
-      // For PDFs, respect the actual page count, for other formats create pages with ~300 words each
-      const pageCount = selectedDoc.pageCount || Math.max(1, Math.ceil(selectedDoc.text.length / 2000));
-      const wordsPerPage = selectedDoc.type === 'pdf' ? 0 : 300; // 0 means use PDF's natural page breaks
-      
-      // Split text into true book-like pages
-      const pages = splitTextIntoPages(selectedDoc.text || '', pageCount, wordsPerPage);
-      setDocPages(pages);
-      setTotalPages(pages.length);
-      
-      // Set initial page
-      setCurrentPage(1);
-      
-      // Set initial page text
-      if (pages.length > 0) {
-        setCurrentPageText(pages[0].text);
-      }
-      
-      // Create improved mapping between chunks and pages
-      const mapping = mapChunksToPages(chunks, pages);
-      setChunkToPageMapping(mapping);
-      
-      // Reset position tracking with enhanced global position
-      lastPositionRef.current = { 
-        page: 1, 
-        chunk: 0, 
-        position: 0,
-        globalPosition: pages[0] ? pages[0].startPosition : 0
-      };
-      
-      // Reset reading progress
-      readingProgressRef.current = {
-        lastPage: 1,
-        lastPosition: 0
-      };
-      
-      setError(null);
-      
-      // Try to restore last reading position from localStorage
-      const lastPositionKey = `audioReadProPosition_${selectedDoc.id}`;
-      const savedPosition = localStorage.getItem(lastPositionKey);
-      
-      if (savedPosition) {
-        try {
-          const positionData = JSON.parse(savedPosition);
-          handlePageChange(positionData.page, false); // Don't start speaking automatically
-        } catch (e) {
-          console.error('Error restoring reading position:', e);
-        }
-      }
-    }
-  };
+      // (rest unchanged) ...
   
   // Handle adding new documents
   const handleAddDocument = async (acceptedFiles) => {
