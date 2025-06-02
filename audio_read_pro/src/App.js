@@ -509,7 +509,6 @@ function App() {
               const wordId = wordKey;
 
               // Store the mapping between char position and word element ID
-              const relativeCharIndex = currentOffset - pageStartPosition;
               wordElementsRef.current[wordKey] = wordId;
 
               return (
@@ -696,7 +695,7 @@ function App() {
       const possibleKeys = Object.entries(wordElementsRef.current);
       let bestDistance = Number.MAX_SAFE_INTEGER, candidateId = null;
       for (const [key, id] of possibleKeys) {
-        const match = key.match(/^word-(\-?\d+)-(.+)$/);
+        const match = key.match(/^word-(-?\d+)-(.+)$/);
         if (match) {
           const charIdx = parseInt(match[1]);
           const w = match[2];
