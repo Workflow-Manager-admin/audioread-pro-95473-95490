@@ -20,7 +20,8 @@ import {
   splitTextIntoPages, 
   mapChunksToPages,
   findChunkByPosition,
-  getPositionInfo
+  getPositionInfo,
+  splitTextToWordSpans
 } from './utils/documentUtils';
 import './App.css';
 
