@@ -109,10 +109,10 @@ const useSpeechSynthesis = () => {
   // Function to speak text (defined outside useCallback to avoid circular dependencies)
   function speak(input, options = {}) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    
+
     // Cancel any ongoing speech
     window.speechSynthesis.cancel();
-    
+
     let utteranceToSpeak;
     if (input instanceof SpeechSynthesisUtterance) {
       utteranceToSpeak = input;
@@ -121,39 +121,65 @@ const useSpeechSynthesis = () => {
       utteranceToSpeak = configureUtterance(input, options);
       currentTextRef.current = input;
     }
-    
+
     // Reset position if starting new text
     currentPositionRef.current = 0;
-    
-    // Store original onend and add our state handling
+
+    // Defensive: clear all existing timeouts
+    clearSpeechTimeouts();
+
+    // Helper to force-stuck reset/cancel (invoked from stuck detection)
+    const handleStuckSpeech = (reason = "Speech stuck or boundary missing") => {
+      utteranceRef.current = null;
+      setSpeaking(false);
+      setPaused(false);
+      clearSpeechTimeouts();
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      // Notify listeners with special stuck indicator if needed (clients can react/clear highlights)
+      wordBoundaryListenersRef.current.forEach(listener => {
+        try { listener({ type: "stuck", reason }); } catch {}
+      });
+    };
+
+    // Main onend handler (cleans up stuck speech detection too)
     const originalOnEnd = utteranceToSpeak.onend;
-    
     utteranceToSpeak.onend = (event) => {
       utteranceRef.current = null;
       setSpeaking(false);
       setPaused(false);
-      
+      clearSpeechTimeouts();
       if (typeof originalOnEnd === 'function') {
         originalOnEnd(event);
       }
     };
-    
-    // Handle errors
+
+    // Defensive error handler (fires on end/error, resets state/clears highlights)
     utteranceToSpeak.onerror = () => {
       utteranceRef.current = null;
       setSpeaking(false);
       setPaused(false);
+      clearSpeechTimeouts();
+      // Notify listeners that an error occurred (can use for fallback highlight clears)
+      wordBoundaryListenersRef.current.forEach(listener => {
+        try { listener({ type: "stuck", reason: "SpeechSynthesis error" }); } catch {}
+      });
     };
-    
-    // Handle boundary events to track position with enhanced word identification
+
+    // Defensive onboundary (resets the stuck timer)
     utteranceToSpeak.onboundary = (event) => {
       if (event.name === 'word') {
-        currentPositionRef.current = event.charIndex;
+        // Restart stuck timeout each time a boundary event arrives
+        if (boundaryTimeoutRef.current) clearTimeout(boundaryTimeoutRef.current);
+        boundaryTimeoutRef.current = setTimeout(() => {
+          // If we don't get another boundary for a while, force cancel
+          handleStuckSpeech("No onboundary for over " + BOUNDARY_TIMEOUT_MS + "ms");
+        }, BOUNDARY_TIMEOUT_MS);
 
+        currentPositionRef.current = event.charIndex;
         if (event.charIndex < currentTextRef.current.length) {
-          // Determine the actual word using event.charIndex and look ahead/back for best match
           const text = currentTextRef.current;
-          // Greedy match for a word using regex, anchored at pos
           let match = text.slice(event.charIndex).match(/^([\w'-]+)/);
           let currentWord = "";
           let wordStart = event.charIndex;
@@ -205,10 +231,18 @@ const useSpeechSynthesis = () => {
         }
       }
     };
-    
+
+    // Kick off a defensive stuck speech global timer after utterance starts
+    stuckSpeechTimeoutRef.current = setTimeout(() => {
+      // If utterance still present after N seconds, forcibly clean up
+      if (utteranceRef.current) {
+        handleStuckSpeech("Utterance ran over " + STUCK_SPEECH_TIMEOUT_MS + "ms (likely stuck)");
+      }
+    }, STUCK_SPEECH_TIMEOUT_MS);
+
     // Store reference to current utterance
     utteranceRef.current = utteranceToSpeak;
-    
+
     setSpeaking(true);
     setPaused(false);
     window.speechSynthesis.speak(utteranceToSpeak);
