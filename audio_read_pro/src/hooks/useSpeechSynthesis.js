@@ -13,6 +13,7 @@ const useSpeechSynthesis = () => {
   // Defensive timeout refs for stuck playback/missing events
   const boundaryTimeoutRef = useRef(null);
   const stuckSpeechTimeoutRef = useRef(null);
+  const fatalSyncErrorRef = useRef(false); // Detect catastrophic SpeechSync fault
 
   // Configurable watchdog timers
   const BOUNDARY_TIMEOUT_MS = 3000;
