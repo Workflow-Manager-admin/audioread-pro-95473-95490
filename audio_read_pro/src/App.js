@@ -87,8 +87,19 @@ function App() {
     getPlaybackContext,
     registerWordBoundaryListener,
     getCurrentGlobalPosition,
-    clearAllSpeechContext
+    clearAllSpeechContext,
+    isFatalSyncError
   } = useSpeechSynthesis();
+
+  // Defensive global: UI feedback if browser/tts sync error
+  const [speechFatalSync, setSpeechFatalSync] = useState(false);
+
+  // Defensive: Clear all highlights and all speech context (synchronize both UI and speech even if API is broken)
+  const fullyResetSpeechAndHighlights = useCallback(() => {
+    clearAllHighlights();
+    clearAllSpeechContext();
+    setIsPlaying(false);
+  }, []);
   
   const {
     documents,
