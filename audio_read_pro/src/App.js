@@ -883,6 +883,16 @@ function App() {
       }
     };
   }, [speaking, paused, registerWordBoundaryListener, handleWordBoundary, docPages, currentPage]);
+  useEffect(() => {
+    // Defensive: catch browser sync loss from hook anytime (including after timeout)
+    if (typeof isFatalSyncError === 'function' && isFatalSyncError()) {
+      setSpeechFatalSync(true);
+      setError("Browser Speech API synchronization failed. Try reloading this page if audio controls remain unresponsive.");
+      fullyResetSpeechAndHighlights();
+    }
+    // Do not clear fatalSync on successful speech, only clear on user event (handled elsewhere)
+    // eslint-disable-next-line
+  }, [isFatalSyncError]);
   
   // Clean up highlighting when changing pages (resync highlight after resumes/seeks)
   useEffect(() => {
@@ -900,18 +910,16 @@ function App() {
   // Cleanup speech synthesis on unmount
   useEffect(() => {
     return () => {
-      if (speaking) {
-        cancel();
-      }
-      
-      // Clean up word boundary listener
+      fullyResetSpeechAndHighlights();
+      setSpeechFatalSync(false);
+      setError(null);
       if (wordBoundaryUnsubscribeRef.current) {
         wordBoundaryUnsubscribeRef.current();
         wordBoundaryUnsubscribeRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [speaking]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!window.speechSynthesis) {
     return <div className="error-message">Text-to-speech is not supported in your browser.</div>;
