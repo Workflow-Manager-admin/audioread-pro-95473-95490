@@ -5,12 +5,21 @@ import { splitTextToWordSpans } from '../utils/documentUtils';
  * - Enhanced with robust event handling, word boundary correction, and defensive (debounced/retry) mechanisms
  * - Fixed glitches with highlights, stuck speech, and misaligned spoken words.
  * - Defensive improvements for browser API quirks and event timing
+ * - Now adds robust timeouts, stuck speech/playback detection, ghost highlight/timeouts, and cross-callback cleanup.
  */
 const useSpeechSynthesis = () => {
   const [voices, setVoices] = useState([]);
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
-  
+
+  // Defensive/error handling timeouts/refs
+  const boundaryTimeoutRef = useRef(null);
+  const stuckSpeechTimeoutRef = useRef(null);
+
+  // Configurable timeouts (ms)
+  const BOUNDARY_TIMEOUT_MS = 3000; // How long to wait for another word boundary before considering it missing
+  const STUCK_SPEECH_TIMEOUT_MS = 12000; // Max time after last boundary/onend before forcibly cancelling
+
   // Enhanced tracking for utterance, text position, and context
   const utteranceRef = useRef(null);
   const currentTextRef = useRef('');
@@ -28,6 +37,18 @@ const useSpeechSynthesis = () => {
     pageIndex: 0,
     wordIndex: 0
   });
+
+  // Helper to clear and restart speech stuck/delay timeouts
+  function clearSpeechTimeouts() {
+    if (boundaryTimeoutRef.current) {
+      clearTimeout(boundaryTimeoutRef.current);
+      boundaryTimeoutRef.current = null;
+    }
+    if (stuckSpeechTimeoutRef.current) {
+      clearTimeout(stuckSpeechTimeoutRef.current);
+      stuckSpeechTimeoutRef.current = null;
+    }
+  }
   
   // Get available voices and update when the list changes
   useEffect(() => {
