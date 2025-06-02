@@ -511,6 +511,22 @@ function App() {
     });
   }
 
+  // --- Memoized shared word spans for current full document scope (cross-page) ---
+  // This ensures both rendering and boundary logic use the same splitTextToWordSpans output.
+  const [sharedWordSpans, setSharedWordSpans] = useState([]);
+  useEffect(() => {
+    if (documentText) {
+      try {
+        // Only recompute if document text changes
+        setSharedWordSpans(splitTextToWordSpans(documentText, 0));
+      } catch (e) {
+        setSharedWordSpans([]);
+      }
+    } else {
+      setSharedWordSpans([]);
+    }
+  }, [documentText]);
+
   // Render text with clickable words, emitting spans aligned to canonical offsets
   const renderTextWithClickableWords = () => {
     if (!currentPageText) return null;
@@ -518,48 +534,73 @@ function App() {
 
     // Correct starting offset for this page within the global text
     const pageStart = docPages[currentPage - 1]?.startPosition || 0;
+    const pageEnd = docPages[currentPage - 1]?.endPosition || 0;
     wordElementsRef.current = {};
 
-    // Split text into paragraphs
+    // Defensive: filter sharedWordSpans to only those whose offset is in current page range
+    const pageWordSpans = (sharedWordSpans || []).filter(
+      span =>
+        typeof span.offset === 'number' &&
+        span.offset >= pageStart &&
+        span.offset < pageEnd
+    );
+
+    // Generate markup: reconstruct paragraphs by slice of word spans between paragraph breaks
+    // Paragraphs by \n, track running globalOffset
     const paragraphs = currentPageText.split('\n');
-    let runningOffset = pageStart;
+    let paraSpans = [];
+    let currOffset = pageStart;
+    let wordSpanIdx = 0;
 
     return paragraphs.map((paragraph, paraIndex) => {
+      let paraLen = paragraph.length + 1; // +1 for newline
+      // Gather all word spans whose offset falls in this paragraph range (defensive for CR/LF)
+      let paraStart = currOffset;
+      let paraEnd = paraStart + paragraph.length;
+      let theseSpans = [];
+      // Defensive lookahead
+      while (
+        wordSpanIdx < pageWordSpans.length &&
+        pageWordSpans[wordSpanIdx].offset < paraEnd
+      ) {
+        theseSpans.push(pageWordSpans[wordSpanIdx]);
+        wordSpanIdx++;
+      }
+      currOffset += paraLen;
+
       if (!paragraph.trim()) {
-        runningOffset += paragraph.length + 1;
         return <p key={`p-${paraIndex}`}>&nbsp;</p>;
       }
-
-      // Use canonical utility for splitting into word/non-word spans
-      const spans = splitTextToWordSpans(paragraph, runningOffset);
-      runningOffset += paragraph.length + 1;
-
       return (
         <p key={`p-${paraIndex}`}>
-          {spans.map((span, idx) => {
-            const wordKey = `word-${span.offset - pageStart}-${span.text}`.replace(/\s+/g, '').toLowerCase();
-            const wordId = wordKey;
+          {theseSpans.length
+            ? theseSpans.map((span, idx) => {
+                // Canonical wordKey, always based on global offsets (for current page).
+                const relOffset = span.offset - pageStart;
+                const wordKey = `word-${relOffset}-${span.text}`.replace(/\s+/g, '').toLowerCase();
+                const wordId = wordKey;
 
-            if (span.word) {
-              wordElementsRef.current[wordKey] = wordId;
-              return (
-                <span
-                  id={wordId}
-                  key={wordKey}
-                  className="clickable-word"
-                  onClick={() => handleWordClick(span.text, idx, span.offset)}
-                  data-offset={span.offset}
-                  data-word={span.text}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {span.text}
-                </span>
-              );
-            } else {
-              // Spaces or punctuation
-              return <span key={`space-${paraIndex}-${idx}`}>{span.text}</span>;
-            }
-          })}
+                if (span.word) {
+                  wordElementsRef.current[wordKey] = wordId;
+                  return (
+                    <span
+                      id={wordId}
+                      key={wordKey}
+                      className="clickable-word"
+                      onClick={() => handleWordClick(span.text, idx, span.offset)}
+                      data-offset={span.offset}
+                      data-word={span.text}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {span.text}
+                    </span>
+                  );
+                } else {
+                  // Spaces or punctuation
+                  return <span key={`space-${paraIndex}-${idx}`}>{span.text}</span>;
+                }
+              })
+            : paragraph}
         </p>
       );
     });
