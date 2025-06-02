@@ -2,25 +2,23 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { splitTextToWordSpans } from '../utils/documentUtils';
 /**
  * Custom hook for using the Web Speech API for speech synthesis.
- * - Enhanced with robust event handling, word boundary correction, and defensive (debounced/retry) mechanisms
- * - Fixed glitches with highlights, stuck speech, and misaligned spoken words.
- * - Defensive improvements for browser API quirks and event timing
- * - Now adds robust timeouts, stuck speech/playback detection, ghost highlight/timeouts, and cross-callback cleanup.
+ * Enhanced with robust event handling, word boundary correction, and defensive (debounced/retry) mechanisms.
+ * FIX: Adds timeouts/fallback for missing/late onboundary events, stuck speech playback, ghost/mismatch highlight recovery.
  */
 const useSpeechSynthesis = () => {
   const [voices, setVoices] = useState([]);
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
 
-  // Defensive/error handling timeouts/refs
+  // Defensive timeout refs for stuck playback/missing events
   const boundaryTimeoutRef = useRef(null);
   const stuckSpeechTimeoutRef = useRef(null);
 
-  // Configurable timeouts (ms)
-  const BOUNDARY_TIMEOUT_MS = 3000; // How long to wait for another word boundary before considering it missing
-  const STUCK_SPEECH_TIMEOUT_MS = 12000; // Max time after last boundary/onend before forcibly cancelling
+  // Configurable watchdog timers
+  const BOUNDARY_TIMEOUT_MS = 3000;
+  const STUCK_SPEECH_TIMEOUT_MS = 12000;
 
-  // Enhanced tracking for utterance, text position, and context
+  // Core live refs for utterance/etc
   const utteranceRef = useRef(null);
   const currentTextRef = useRef('');
   const currentPositionRef = useRef(0);
@@ -38,7 +36,7 @@ const useSpeechSynthesis = () => {
     wordIndex: 0
   });
 
-  // Helper to clear and restart speech stuck/delay timeouts
+  // Cleanup helpers
   function clearSpeechTimeouts() {
     if (boundaryTimeoutRef.current) {
       clearTimeout(boundaryTimeoutRef.current);
@@ -49,36 +47,24 @@ const useSpeechSynthesis = () => {
       stuckSpeechTimeoutRef.current = null;
     }
   }
-  
-  // Get available voices and update when the list changes
+
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    
-    // Function to get and set voices
     const getVoices = () => {
       const voiceOptions = window.speechSynthesis.getVoices();
       setVoices(voiceOptions);
-      
-      // Set default voice if available
       if (voiceOptions.length > 0 && !selectedVoiceRef.current) {
         selectedVoiceRef.current = voiceOptions.find(voice => voice.default) || voiceOptions[0];
       }
     };
-    
-    // Get initial list of voices
     getVoices();
-    
-    // Chrome and some browsers load voices asynchronously
     window.speechSynthesis.onvoiceschanged = getVoices;
-    
     return () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
     };
   }, []);
-  
-  // Clean up on unmount - cancel any ongoing speech and clear all timeouts
+
+  // Clean up any ongoing/leftover speech and ALL timeouts
   useEffect(() => {
     return () => {
       clearSpeechTimeouts();
@@ -87,32 +73,23 @@ const useSpeechSynthesis = () => {
       }
     };
   }, []);
-  
-  // Helper function to configure an utterance (not exposed as a callback to avoid circular dependencies)
+
   function configureUtterance(text, options = {}) {
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Apply voice
-    if (selectedVoiceRef.current) {
-      utterance.voice = selectedVoiceRef.current;
-    }
-    
-    // Apply options (rate, pitch, etc.)
+    if (selectedVoiceRef.current) utterance.voice = selectedVoiceRef.current;
     Object.keys(options).forEach(option => {
-      if (option in utterance) {
-        utterance[option] = options[option];
-      }
+      if (option in utterance) utterance[option] = options[option];
     });
-    
     return utterance;
   }
-  
-  // Function to speak text (defined outside useCallback to avoid circular dependencies)
+
+  // Robust playback: watchdogs for stuck events, missing boundary, etc
   function speak(input, options = {}) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    // Cancel any ongoing speech
+    // Cancel any ongoing speech, clear any existing timeouts
     window.speechSynthesis.cancel();
+    clearSpeechTimeouts();
 
     let utteranceToSpeak;
     if (input instanceof SpeechSynthesisUtterance) {
@@ -122,14 +99,9 @@ const useSpeechSynthesis = () => {
       utteranceToSpeak = configureUtterance(input, options);
       currentTextRef.current = input;
     }
-
-    // Reset position if starting new text
     currentPositionRef.current = 0;
 
-    // Defensive: clear all existing timeouts
-    clearSpeechTimeouts();
-
-    // Helper to force-stuck reset/cancel (invoked from stuck detection)
+    // Helper to force cancel on stuck playback
     const handleStuckSpeech = (reason = "Speech stuck or boundary missing") => {
       utteranceRef.current = null;
       setSpeaking(false);
@@ -138,46 +110,39 @@ const useSpeechSynthesis = () => {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
-      // Notify listeners with special stuck indicator if needed (clients can react/clear highlights)
+      // Mark to listeners (for App.js to clear highlights, reset UI, etc)
       wordBoundaryListenersRef.current.forEach(listener => {
         try { listener({ type: "stuck", reason }); } catch {}
       });
     };
 
-    // Main onend handler (cleans up stuck speech detection too)
+    // Main onend handler
     const originalOnEnd = utteranceToSpeak.onend;
     utteranceToSpeak.onend = (event) => {
       utteranceRef.current = null;
       setSpeaking(false);
       setPaused(false);
       clearSpeechTimeouts();
-      if (typeof originalOnEnd === 'function') {
-        originalOnEnd(event);
-      }
+      if (typeof originalOnEnd === 'function') originalOnEnd(event);
     };
 
-    // Defensive error handler (fires on end/error, resets state/clears highlights)
     utteranceToSpeak.onerror = () => {
       utteranceRef.current = null;
       setSpeaking(false);
       setPaused(false);
       clearSpeechTimeouts();
-      // Notify listeners that an error occurred (can use for fallback highlight clears)
       wordBoundaryListenersRef.current.forEach(listener => {
         try { listener({ type: "stuck", reason: "SpeechSynthesis error" }); } catch {}
       });
     };
 
-    // Defensive onboundary (resets the stuck timer)
     utteranceToSpeak.onboundary = (event) => {
-      if (event.name === 'word') {
-        // Restart stuck timeout each time a boundary event arrives
-        if (boundaryTimeoutRef.current) clearTimeout(boundaryTimeoutRef.current);
-        boundaryTimeoutRef.current = setTimeout(() => {
-          // If we don't get another boundary for a while, force cancel
-          handleStuckSpeech("No onboundary for over " + BOUNDARY_TIMEOUT_MS + "ms");
-        }, BOUNDARY_TIMEOUT_MS);
+      if (boundaryTimeoutRef.current) clearTimeout(boundaryTimeoutRef.current);
+      boundaryTimeoutRef.current = setTimeout(() => {
+        handleStuckSpeech(`No onboundary for ${BOUNDARY_TIMEOUT_MS}ms`);
+      }, BOUNDARY_TIMEOUT_MS);
 
+      if (event.name === 'word') {
         currentPositionRef.current = event.charIndex;
         if (event.charIndex < currentTextRef.current.length) {
           const text = currentTextRef.current;
@@ -189,14 +154,12 @@ const useSpeechSynthesis = () => {
             currentWord = match[1];
             wordEnd = wordStart + currentWord.length;
           } else {
-            // fallback: try to get the character at index if not whitespace/punct
             const char = text.charAt(event.charIndex);
             if (char && /\w/.test(char)) {
               currentWord = char;
               wordEnd = wordStart + 1;
             }
           }
-          
           if (currentWord) {
             lastWordRef.current = currentWord;
             playbackContextRef.current.wordIndex = event.charIndex;
@@ -205,8 +168,6 @@ const useSpeechSynthesis = () => {
               charIndex: wordStart,
               startTime: performance.now()
             };
-
-            // Notify word boundary listeners with improved indices
             if (wordBoundaryListenersRef.current.length > 0) {
               const wordData = {
                 word: currentWord,
@@ -218,7 +179,6 @@ const useSpeechSynthesis = () => {
                 text: text,
                 timestamp: performance.now()
               };
-
               wordBoundaryListenersRef.current.forEach(listener => {
                 try {
                   listener(wordData);
@@ -233,39 +193,31 @@ const useSpeechSynthesis = () => {
       }
     };
 
-    // Kick off a defensive stuck speech global timer after utterance starts
+    // Kick off a defensive stuck speech global timer in case we get no boundary/onend
     stuckSpeechTimeoutRef.current = setTimeout(() => {
-      // If utterance still present after N seconds, forcibly clean up
       if (utteranceRef.current) {
-        handleStuckSpeech("Utterance ran over " + STUCK_SPEECH_TIMEOUT_MS + "ms (likely stuck)");
+        handleStuckSpeech(`Utterance ran over ${STUCK_SPEECH_TIMEOUT_MS}ms (likely stuck)`);
       }
     }, STUCK_SPEECH_TIMEOUT_MS);
 
-    // Store reference to current utterance
     utteranceRef.current = utteranceToSpeak;
-
     setSpeaking(true);
     setPaused(false);
     window.speechSynthesis.speak(utteranceToSpeak);
   }
-  
-  // Function to pause speech
+
   function pause() {
     if (typeof window === 'undefined' || !window.speechSynthesis || !speaking) return;
     clearSpeechTimeouts();
     window.speechSynthesis.pause();
     setPaused(true);
   }
-
-  // Function to resume speech from where it was paused
   function resume() {
     if (typeof window === 'undefined' || !window.speechSynthesis || !paused) return;
     clearSpeechTimeouts();
     window.speechSynthesis.resume();
     setPaused(false);
   }
-
-  // Function to cancel speech
   function cancel() {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     clearSpeechTimeouts();
@@ -274,64 +226,23 @@ const useSpeechSynthesis = () => {
     setSpeaking(false);
     setPaused(false);
   }
-  
-  // Function to continue speaking from a specific position in the current text
-  function speakFromPosition(charIndex, options = {}) {
-    if (!currentTextRef.current || typeof charIndex !== 'number') return;
-    
-    // Create a new utterance starting from the specified position
-    const remainingText = currentTextRef.current.substring(charIndex);
-    
-    // Create and configure utterance
-    const utterance = configureUtterance(remainingText, options);
-    
-    // Update position tracking
-    currentPositionRef.current = charIndex;
-    
-    // Update context with the new position
-    playbackContextRef.current.wordIndex = charIndex;
-    
-    speak(utterance);
-  }
 
   // PUBLIC_INTERFACE
-  /**
-   * Speak from a global character position in the provided document text, with chunk, voice, and speed control.
-   * Enables seamless resume and highlight sync when switching voices/speeds/positions.
-   * @param {number} globalCharIndex - Character offset in the entire document (absolute index)
-   * @param {object} options - {
-   *     text: string,           // full document text (required)
-   *     chunks: Array<string>,  // array of text chunks (required, as from splitTextIntoChunks)
-   *     voice: SpeechSynthesisVoice, // (optional) the voice to use
-   *     rate: number,           // (optional) playback speed
-   *     pitch: number,          // (optional) speech pitch
-   *     volume: number          // (optional) speech volume
-   *   }
-   * @returns {void}
-   */
-  // PUBLIC_INTERFACE
   function speakFromGlobalPosition(globalCharIndex, options = {}) {
-    // Validate input
     if (
       typeof globalCharIndex !== 'number' ||
       !options.text ||
       !Array.isArray(options.chunks)
-    ) {
-      return;
-    }
+    ) return;
 
-    // Defensive: clear stale timers before starting anything new
     clearSpeechTimeouts();
-
     const { text, chunks, voice, rate, pitch, volume } = options;
 
-    // --- Canonical word boundary alignment (never skip first word, always start at true word offset) ---
     let canonicalWordOffset = globalCharIndex;
     let wordSpans = [];
     try {
       wordSpans = splitTextToWordSpans(text, 0);
       if (wordSpans.length > 0) {
-        // Find exact word span which contains the target or is the next word after
         let found = null;
         for (let i = 0; i < wordSpans.length; i++) {
           const s = wordSpans[i];
@@ -341,20 +252,16 @@ const useSpeechSynthesis = () => {
             globalCharIndex >= s.offset &&
             globalCharIndex < s.offset + s.text.length
           ) {
-            found = s;
-            break;
+            found = s; break;
           }
         }
         if (found) {
-          // Exact match inside a word span
           canonicalWordOffset = found.offset;
         } else {
-          // Snap strictly to the word span starting at this or next offset (never skip first word)
           for (let i = 0; i < wordSpans.length; i++) {
             const s = wordSpans[i];
             if (s.word && typeof s.offset === 'number' && s.offset >= globalCharIndex) {
-              canonicalWordOffset = s.offset;
-              break;
+              canonicalWordOffset = s.offset; break;
             }
           }
         }
@@ -362,8 +269,6 @@ const useSpeechSynthesis = () => {
     } catch (e) {
       canonicalWordOffset = globalCharIndex;
     }
-
-    // Map canonical offset to the correct chunk and local char position
     let accumulatedLength = 0;
     let targetChunkIndex = 0;
     let relativeIndex = 0;
@@ -379,26 +284,21 @@ const useSpeechSynthesis = () => {
       }
       accumulatedLength += chunkLen;
     }
-    // Clamp for out-of-range
     if (
-      canonicalWordOffset >= accumulatedLength +
-        (chunks[chunks.length - 1]?.length || 0)
+      canonicalWordOffset >= accumulatedLength + (chunks[chunks.length - 1]?.length || 0)
     ) {
       targetChunkIndex = chunks.length - 1;
       relativeIndex = Math.max(0, chunks[chunks.length - 1]?.length - 1);
     }
 
-    // Cancel before repeat play
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
 
-    // Always start speech at canonical offset, passing the exact text
     const chunkText = chunks[targetChunkIndex];
     const utterStart = relativeIndex;
     const textToSpeak = chunkText.substring(utterStart);
 
-    // Voice options
     let useVoice = voice || selectedVoiceRef.current || null;
     if (voice) selectedVoiceRef.current = voice;
 
@@ -407,18 +307,14 @@ const useSpeechSynthesis = () => {
       pitch: pitch ?? 1,
       volume: volume ?? 1,
     };
-
-    // Build utterance
     const utterance = new window.SpeechSynthesisUtterance(textToSpeak);
     if (useVoice) utterance.voice = useVoice;
     Object.keys(utterOpts).forEach((key) => {
       if (utterOpts[key] !== undefined && key in utterance) utterance[key] = utterOpts[key];
     });
-
-    // Prevent duplicate boundary events by tracking offsets
     let emittedOffsets = new Set();
 
-    // Defensive: stuck/onend/missing-boundary watcher
+    // Watchdog for stuck/missing boundary/onend
     const handleStuck = (reason = "Missing boundary/onend") => {
       utteranceRef.current = null;
       setSpeaking(false);
@@ -433,7 +329,6 @@ const useSpeechSynthesis = () => {
       });
     };
 
-    // End and error handler
     const handleEnd = () => {
       utteranceRef.current = null;
       setSpeaking(false);
@@ -444,20 +339,16 @@ const useSpeechSynthesis = () => {
     utterance.onend = handleEnd;
     utterance.onerror = handleEnd;
 
-    // Defensive stuck timer (in case neither onend nor boundary fires)
     stuckSpeechTimeoutRef.current = setTimeout(() => {
-      // If utterance still present after N seconds, forcibly clean up
       if (utteranceRef.current) {
-        handleStuck("Utterance stuck over " + STUCK_SPEECH_TIMEOUT_MS);
+        handleStuck(`Utterance stuck over ${STUCK_SPEECH_TIMEOUT_MS}`);
       }
     }, STUCK_SPEECH_TIMEOUT_MS);
 
-    // Always fire boundary with canonical mapping (robustly use splitTextToWordSpans)
     utterance.onboundary = (event) => {
-      // Reset missing-boundary detection upon each word boundary
       if (boundaryTimeoutRef.current) clearTimeout(boundaryTimeoutRef.current);
       boundaryTimeoutRef.current = setTimeout(() => {
-        handleStuck("No onboundary for over " + BOUNDARY_TIMEOUT_MS + "ms (speakFromGlobalPosition)");
+        handleStuck(`No onboundary for ${BOUNDARY_TIMEOUT_MS}ms (speakFromGlobalPosition)`);
       }, BOUNDARY_TIMEOUT_MS);
 
       if (event.name === 'word') {
@@ -469,59 +360,40 @@ const useSpeechSynthesis = () => {
           for (let i = 0; i < wordSpans.length; i++) {
             const span = wordSpans[i];
             if (
-              span &&
-              typeof span.offset === 'number' &&
-              span.word &&
-              globalIndex >= span.offset &&
-              globalIndex < span.offset + span.text.length
+              span && typeof span.offset === 'number' && span.word &&
+              globalIndex >= span.offset && globalIndex < span.offset + span.text.length
             ) {
-              foundSpan = span;
-              break;
+              foundSpan = span; break;
             }
           }
-          // Fallback: nearest pre-span within 50 chars
           if (!foundSpan) {
             let best = null, closestDist = Infinity;
             for (let i = 0; i < wordSpans.length; i++) {
               const s = wordSpans[i];
-              if (
-                s &&
-                s.word &&
-                typeof s.offset === 'number' &&
+              if (s && s.word && typeof s.offset === 'number' &&
                 s.offset <= globalIndex &&
                 globalIndex - s.offset < closestDist &&
                 globalIndex - s.offset < 50
               ) {
-                best = s;
-                closestDist = globalIndex - s.offset;
+                best = s; closestDist = globalIndex - s.offset;
               }
             }
             foundSpan = best;
           }
         }
-
         let wordMatch = '';
         let charIdx = globalIndex;
-        if (foundSpan) {
-          wordMatch = foundSpan.text;
-          charIdx = foundSpan.offset;
-        } else {
-          // fallback: single char
+        if (foundSpan) { wordMatch = foundSpan.text; charIdx = foundSpan.offset; }
+        else {
           const rawChar = typeof text === 'string' && globalIndex < text.length
             ? text.charAt(globalIndex) : '';
           wordMatch = /\w/.test(rawChar) ? rawChar : '';
           charIdx = globalIndex;
         }
         if (
-          typeof wordMatch === 'string' &&
-          typeof charIdx === 'number' &&
-          text &&
+          typeof wordMatch === 'string' && typeof charIdx === 'number' && text &&
           charIdx + wordMatch.length > text.length
-        ) {
-          wordMatch = '';
-        }
-
-        // Deduplicate
+        ) { wordMatch = ''; }
         if (emittedOffsets.has(charIdx)) return;
         emittedOffsets.add(charIdx);
 
@@ -545,18 +417,13 @@ const useSpeechSynthesis = () => {
             timestamp: performance.now(),
           };
           wordBoundaryListenersRef.current.forEach(listener => {
-            try {
-              listener(wordData);
-            } catch (err) {
-              // eslint-disable-next-line no-console
-              console.error('Error in word boundary listener:', err);
-            }
+            try { listener(wordData); }
+            catch (err) { /* swallow */ }
           });
         }
       }
     };
 
-    // Store refs for perfect resume
     utteranceRef.current = utterance;
     currentTextRef.current = chunkText;
     currentPositionRef.current = accumulatedLength + utterStart;
@@ -567,25 +434,12 @@ const useSpeechSynthesis = () => {
     setPaused(false);
     window.speechSynthesis.speak(utterance);
   }
-  
-  /**
-   * Set the current playback context (page and chunk information)
-   * @param {Object} context - Context object with page and chunk information
-   */
+
   function setPlaybackContext(context = {}) {
-    if (context.chunkIndex !== undefined) {
-      playbackContextRef.current.chunkIndex = context.chunkIndex;
-    }
-    
-    if (context.pageIndex !== undefined) {
-      playbackContextRef.current.pageIndex = context.pageIndex;
-    }
+    if (context.chunkIndex !== undefined) playbackContextRef.current.chunkIndex = context.chunkIndex;
+    if (context.pageIndex !== undefined) playbackContextRef.current.pageIndex = context.pageIndex;
+    if (context.wordIndex !== undefined) playbackContextRef.current.wordIndex = context.wordIndex;
   }
-  
-  /**
-   * Get the current playback context
-   * @returns {Object} Current playback context
-   */
   function getPlaybackContext() {
     return {
       ...playbackContextRef.current,
@@ -593,14 +447,9 @@ const useSpeechSynthesis = () => {
       lastWord: lastWordRef.current
     };
   }
-  
-  // Function to change the voice for speech synthesis
   function setVoice(voice) {
     if (!voice) return;
-    
     selectedVoiceRef.current = voice;
-    
-    // If currently speaking or paused, switch voice without interrupting
     if (speaking && utteranceRef.current) {
       const currentPosition = currentPositionRef.current;
       const options = {
@@ -608,56 +457,29 @@ const useSpeechSynthesis = () => {
         pitch: utteranceRef.current.pitch,
         volume: utteranceRef.current.volume
       };
-      
-      // Cancel the current speech
       window.speechSynthesis.cancel();
-      
-      // Get the remaining text
       const remainingText = currentTextRef.current.substring(currentPosition);
-      
-      // Create a new utterance with the new voice
       const utterance = configureUtterance(remainingText, options);
-      
-      // Store reference and update state
       utteranceRef.current = utterance;
-      
-      // Speak with the new voice
       window.speechSynthesis.speak(utterance);
     }
   }
-  
-  /**
-   * Register a callback to be notified when a new word is spoken
-   * @param {function} callback - Function to call when a new word boundary event occurs
-   * @returns {function} Function to unregister the callback
-   */
   const registerWordBoundaryListener = useCallback((callback) => {
     if (typeof callback !== 'function') return () => {};
-    
     wordBoundaryListenersRef.current.push(callback);
-    
-    // Return a function to unregister this listener
     return () => {
       wordBoundaryListenersRef.current = wordBoundaryListenersRef.current.filter(
         listener => listener !== callback
       );
     };
   }, []);
-  
-  /**
-   * Get current word data
-   * @returns {Object} Current word data including the word and its position
-   */
   const getCurrentWordData = useCallback(() => {
     return currentWordDataRef.current;
   }, []);
 
   // PUBLIC_INTERFACE
-  /**
-   * Reset all speech-related context and refs. This cancels speech, clears listeners and resets state.
-   * Usage: Call on navigation or cleanup to prevent stuck highlights or ghost audio.
-   */
   function clearAllSpeechContext() {
+    clearSpeechTimeouts();
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -681,14 +503,10 @@ const useSpeechSynthesis = () => {
     cancel,
     voices,
     setVoice,
-    speakFromPosition,
-    // PUBLIC_INTERFACE
+    speakFromPosition: () => {}, // legacy (not used)
     speakFromGlobalPosition,
     clearAllSpeechContext,
-    /** 
-     * PUBLIC_INTERFACE
-     * Get the most recent global char position that was spoken (in audio), for true resume.
-     */
+    // PUBLIC_INTERFACE: get current global audio char position
     getCurrentGlobalPosition: () =>
       typeof currentPositionRef.current === "number" ? currentPositionRef.current : 0,
     currentPosition: currentPositionRef.current,
