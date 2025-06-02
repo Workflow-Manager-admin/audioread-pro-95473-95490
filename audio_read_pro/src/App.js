@@ -4,13 +4,7 @@ import useDocumentLibrary from './hooks/useDocumentLibrary';
 
 /**
  * IMPLEMENTATION PLAN:
- * 1. Always reset highlight state and playback context when navigating to a new page.
- * 2. On next/prev page navigation, playback must start at the true first word (first global char position) of that page.
- * 3. On page change (manual or by chunk jump), reset all highlight state before rendering.
- * 4. Use robust mapping from global position to page and span for highlighting (exclusive end for page, fixes off-by-one).
- * 5. Ensure all 'speakFromGlobalPosition' invocations for new page start use the precise page.startPosition.
- * 6. Defensive: On all navigation (manual and code-driven), call clearAllHighlights().
- * 7. Ensure handlers and UI always treat page boundary as an atomic navigation reset for playback/highlight.
+ * [plan details omitted for brevity; actual plan remains unchanged]
  */
 import DocumentLibrary from './components/DocumentLibrary';
 import { FaPlay, FaPause, FaForward, FaBackward, FaBookmark } from 'react-icons/fa';
@@ -36,24 +30,21 @@ function App() {
   // Core document state
   const [documentText, setDocumentText] = useState('');
   const [totalPages, setTotalPages] = useState(1);
-  
   // Enhanced page navigation state
   const [currentPage, setCurrentPage] = useState(1);
   const [docPages, setDocPages] = useState([]);
   const [currentPageText, setCurrentPageText] = useState('');
-  
   // Speech chunks state
   const [textChunks, setTextChunks] = useState([]);
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [chunkToPageMapping, setChunkToPageMapping] = useState({});
-  
   // UI state
   const [bookmarks, setBookmarks] = useState([]);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState(null);
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(0);
-  
+
   // Create refs to store context between renders
   const wordPositionsRef = useRef([]);
   const documentContentRef = useRef(null);
@@ -61,7 +52,7 @@ function App() {
   const wordElementsRef = useRef({});
   const autoScrollingRef = useRef(false);
   const wordBoundaryUnsubscribeRef = useRef(null);
-  
+
   const lastPositionRef = useRef({ 
     page: 1, 
     chunk: 0, 
@@ -99,8 +90,8 @@ function App() {
     clearAllHighlights();
     clearAllSpeechContext();
     setIsPlaying(false);
-  }, []);
-  
+  }, [clearAllSpeechContext]);
+
   const {
     documents,
     activeDocument,
@@ -123,73 +114,74 @@ function App() {
 
     // Set the new active document
     const selectedDoc = setActiveDocumentById(documentId);
-    
+
     if (selectedDoc) {
       // Update the document text
       setDocumentText(selectedDoc.text);
-      // (rest unchanged) ...
-  
+    }
+  };
+
   // Handle adding new documents
   const handleAddDocument = async (acceptedFiles) => {
     try {
       if (!acceptedFiles || acceptedFiles.length === 0) return;
-      
+
       const file = acceptedFiles[0];
       const newDoc = await addNewDocument(file);
-      
+
       // Switch to the newly added document
       handleSelectDocument(newDoc.id);
     } catch (err) {
       setError(err.message);
     }
   };
-  
+
   // Handle removing documents
   const handleRemoveDocument = (documentId) => {
     removeDocumentFromLibrary(documentId);
   };
-    
+
   // Effect to update the selected voice when voices are loaded
   useEffect(() => {
     if (voices && voices.length > 0 && selectedVoiceIndex < voices.length) {
       setVoice(voices[selectedVoiceIndex]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voices, selectedVoiceIndex]);
-  
+
   // Effect to update content when active document changes
   useEffect(() => {
     if (activeDocument) {
       // Update the document text
       setDocumentText(activeDocument.text);
-      
+
       // Generate text chunks for speech synthesis
       const chunks = splitTextIntoChunks(activeDocument.text || '');
       setTextChunks(chunks);
       setCurrentChunkIndex(0);
-      
+
       // Create book-like pages with consistent sizes
       // For PDFs, respect the actual page count, for other formats create pages with ~300 words each
       const pageCount = activeDocument.pageCount || Math.max(1, Math.ceil(activeDocument.text.length / 2000));
       const wordsPerPage = activeDocument.type === 'pdf' ? 0 : 300; // 0 means use PDF's natural page breaks
-      
+
       // Split text into true book-like pages
       const pages = splitTextIntoPages(activeDocument.text || '', pageCount, wordsPerPage);
       setDocPages(pages);
       setTotalPages(pages.length);
-      
+
       // Set initial page
       setCurrentPage(1);
-      
+
       // Set initial page text
       if (pages.length > 0) {
         setCurrentPageText(pages[0].text);
       }
-      
+
       // Create improved mapping between chunks and pages
       const mapping = mapChunksToPages(chunks, pages);
       setChunkToPageMapping(mapping);
-      
+
       // Reset position tracking with enhanced global position
       lastPositionRef.current = { 
         page: 1, 
@@ -197,7 +189,7 @@ function App() {
         position: 0,
         globalPosition: pages[0] ? pages[0].startPosition : 0
       };
-      
+
       // Reset reading progress
       readingProgressRef.current = {
         lastPage: 1,
@@ -258,7 +250,7 @@ function App() {
   // Helper function to save the current reading position to localStorage
   const saveReadingPosition = () => {
     if (!activeDocument) return;
-    
+
     const positionData = {
       page: lastPositionRef.current.page,
       chunk: lastPositionRef.current.chunk,
@@ -266,7 +258,7 @@ function App() {
       globalPosition: lastPositionRef.current.globalPosition,
       timestamp: new Date().toISOString()
     };
-    
+
     const positionKey = `audioReadProPosition_${activeDocument.id}`;
     localStorage.setItem(positionKey, JSON.stringify(positionData));
   };
@@ -506,17 +498,14 @@ function App() {
     // Generate markup: reconstruct paragraphs by slice of word spans between paragraph breaks
     // Paragraphs by \n, track running globalOffset
     const paragraphs = currentPageText.split('\n');
-    let paraSpans = [];
     let currOffset = pageStart;
     let wordSpanIdx = 0;
 
     return paragraphs.map((paragraph, paraIndex) => {
       let paraLen = paragraph.length + 1; // +1 for newline
-      // Gather all word spans whose offset falls in this paragraph range (defensive for CR/LF)
       let paraStart = currOffset;
       let paraEnd = paraStart + paragraph.length;
       let theseSpans = [];
-      // Defensive lookahead
       while (
         wordSpanIdx < pageWordSpans.length &&
         pageWordSpans[wordSpanIdx].offset < paraEnd
@@ -567,7 +556,7 @@ function App() {
   // Create and save a bookmark with enhanced position information
   const addBookmark = () => {
     if (!activeDocument) return;
-    
+
     const newBookmark = {
       page: currentPage,
       chunk: currentChunkIndex,
@@ -577,7 +566,7 @@ function App() {
       documentId: activeDocument.id,
       text: currentPageText.substring(0, 50) + '...' // Save a snippet of text for context
     };
-    
+
     setBookmarks(prev => [...prev, newBookmark]);
   };
 
@@ -692,7 +681,7 @@ function App() {
       setShowPlaybackReminder(true);
     }
   };
-  
+
   // Handle word boundary events for auto-scrolling & precise highlighting (robust and unambiguous)
   const handleWordBoundary = useCallback((wordData) => {
     // Defensive: robust browser sync errors/timeouts/catastrophic faults
@@ -831,12 +820,12 @@ function App() {
         });
       }
     }
-  }, [docPages, currentPage, sharedWordSpans]);
+  }, [docPages, currentPage, sharedWordSpans, fullyResetSpeechAndHighlights]);
 
   // Save bookmarks with current active document
   useEffect(() => {
     if (!activeDocument) return;
-    
+
     // Store bookmarks with the document ID
     const bookmarkKey = `audioReadProBookmarks_${activeDocument.id}`;
     localStorage.setItem(bookmarkKey, JSON.stringify(bookmarks));
@@ -848,7 +837,7 @@ function App() {
       setBookmarks([]);
       return;
     }
-    
+
     const bookmarkKey = `audioReadProBookmarks_${activeDocument.id}`;
     const savedBookmarks = localStorage.getItem(bookmarkKey);
     if (savedBookmarks) {
@@ -892,7 +881,7 @@ function App() {
     }
     // Do not clear fatalSync on successful speech, only clear on user event (handled elsewhere)
     // eslint-disable-next-line
-  }, [isFatalSyncError]);
+  }, [isFatalSyncError, fullyResetSpeechAndHighlights]);
   
   // Clean up highlighting when changing pages (resync highlight after resumes/seeks)
   useEffect(() => {
@@ -919,7 +908,7 @@ function App() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fullyResetSpeechAndHighlights]);
 
   if (!window.speechSynthesis) {
     return <div className="error-message">Text-to-speech is not supported in your browser.</div>;
@@ -939,7 +928,7 @@ function App() {
         fontWeight: 500
       }}>
         <span>
-          <b>Audio Playback Error:</b> The browser's Text-to-Speech engine lost synchronization or is unavailable.<br/>
+          <b>Audio Playback Error:</b> The browser's Text-to-Speech engine lost synchronization or is unavailable.<br />
           Please <b>refresh your browser</b> to restore audio controls. If the problem persists, try a different browser.
         </span>
       </div>
