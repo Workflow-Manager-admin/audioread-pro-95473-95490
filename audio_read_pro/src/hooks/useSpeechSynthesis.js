@@ -78,9 +78,10 @@ const useSpeechSynthesis = () => {
     };
   }, []);
   
-  // Clean up on unmount - cancel any ongoing speech
+  // Clean up on unmount - cancel any ongoing speech and clear all timeouts
   useEffect(() => {
     return () => {
+      clearSpeechTimeouts();
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
@@ -251,23 +252,23 @@ const useSpeechSynthesis = () => {
   // Function to pause speech
   function pause() {
     if (typeof window === 'undefined' || !window.speechSynthesis || !speaking) return;
-    
+    clearSpeechTimeouts();
     window.speechSynthesis.pause();
     setPaused(true);
   }
-  
+
   // Function to resume speech from where it was paused
   function resume() {
     if (typeof window === 'undefined' || !window.speechSynthesis || !paused) return;
-    
+    clearSpeechTimeouts();
     window.speechSynthesis.resume();
     setPaused(false);
   }
-  
+
   // Function to cancel speech
   function cancel() {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    
+    clearSpeechTimeouts();
     window.speechSynthesis.cancel();
     utteranceRef.current = null;
     setSpeaking(false);
