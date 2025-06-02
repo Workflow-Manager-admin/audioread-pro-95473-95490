@@ -629,7 +629,7 @@ function App() {
   const jumpToBookmark = (bookmark) => {
     // Isolate context before jumping anywhere
     clearAllHighlights();
-    cancel();
+    clearAllSpeechContext();
 
     // If switching documents, let document selection handle position
     if (activeDocument && bookmark.documentId && bookmark.documentId !== activeDocument.id) {
