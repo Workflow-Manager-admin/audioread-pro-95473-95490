@@ -754,11 +754,15 @@ function App() {
   
   // Handle word boundary events for auto-scrolling & precise highlighting (robust and unambiguous)
   const handleWordBoundary = useCallback((wordData) => {
-    // Defensive: handle stuck boundary/missing/onerror "stuck" type signal from hook (clears all highlights and resets playback state)
-    if (wordData && wordData.type === "stuck") {
-      clearAllHighlights();
-      setIsPlaying(false);
-      // Optionally, set error state for UI: setError(wordData.reason || "Speech error");
+    // Defensive: robust browser sync errors/timeouts/catastrophic faults
+    if (wordData && (wordData.type === "fatal-sync" || wordData.type === "stuck")) {
+      fullyResetSpeechAndHighlights();
+      setSpeechFatalSync(true);
+      setError(
+        wordData.type === "fatal-sync"
+          ? "Browser Speech API malfunctioned or disappeared. Please refresh your browser to restore audio."
+          : wordData.reason || "Speech playback lost sync. Audio cancelled."
+      );
       return;
     }
 
