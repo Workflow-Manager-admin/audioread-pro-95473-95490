@@ -252,6 +252,11 @@ function App() {
   // Handle play/pause using the global position API
   const handlePlayPause = () => {
     if (!activeDocument || !docPages.length) return;
+
+    // Robust context isolation: always clear audio & highlights before action
+    clearAllHighlights();
+    cancel();
+
     if (speaking) {
       if (paused) {
         // Resume from the current exact global character position
