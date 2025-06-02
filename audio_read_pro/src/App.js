@@ -13,9 +13,14 @@ import {
 } from './utils/documentUtils';
 import './App.css';
 
-// Initialize PDF.js worker
-if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions.workerSrc) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+/**
+ * Initialize PDF.js worker to use local copy for compatibility with all environments.
+ * (Fixes: Setting up fake worker failed error)
+ * See: https://github.com/wojtekmaj/react-pdf#setting-up-pdf-worker
+ */
+if (typeof window !== 'undefined') {
+  // Use the local PDF worker relative to CRA's public/ folder
+  pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ''}/pdf.worker.mjs`;
 }
 
 function App() {
