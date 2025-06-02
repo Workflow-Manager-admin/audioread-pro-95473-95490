@@ -86,7 +86,8 @@ function App() {
     setPlaybackContext,
     getPlaybackContext,
     registerWordBoundaryListener,
-    getCurrentGlobalPosition
+    getCurrentGlobalPosition,
+    clearAllSpeechContext
   } = useSpeechSynthesis();
   
   const {
@@ -255,7 +256,7 @@ function App() {
 
     // Robust context isolation: always clear audio & highlights before action
     clearAllHighlights();
-    cancel();
+    clearAllSpeechContext();
 
     if (speaking) {
       if (paused) {
