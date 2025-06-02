@@ -1009,15 +1009,29 @@ function App() {
         </div>
       </div>
       {showPlaybackReminder && activeDocument && (
-        <div style={{
-          background: '#ffeeba',
-          color: '#856404',
-          padding: '8px 20px',
-          borderTop: '1px solid #ffe8a1',
-          borderBottom: '1px solid #ffe8a1',
-          textAlign: 'center'
-        }}>
-          Playback stopped. Press <span style={{fontWeight:600}}>Play</span> to resume audio from your last position.
+        <div
+          className="playback-reminder-banner"
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 'var(--controls-bar-height)',
+            zIndex: 1200,
+            background: '#ffeeba',
+            color: '#856404',
+            padding: '12px 20px',
+            borderTop: '1px solid #ffe8a1',
+            borderBottom: '1px solid #ffe8a1',
+            textAlign: 'center',
+            fontSize: '1.06rem',
+            fontWeight: 500,
+            boxShadow: '0 -1px 6px rgba(0,0,0,0.04)'
+          }}
+          aria-live="polite"
+        >
+          <span>
+            Playback is paused. After changing <b>voice</b> or <b>speed</b>, press <span style={{fontWeight:600}}>Play</span> to start or resume audio from your last position.
+          </span>
         </div>
       )}
     </div>
