@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-
+import { splitTextToWordSpans } from '../utils/documentUtils';
 /**
  * Custom hook for using the Web Speech API for speech synthesis.
  * - Enhanced with robust event handling, word boundary correction, and defensive (debounced/retry) mechanisms
