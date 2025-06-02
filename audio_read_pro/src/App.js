@@ -235,13 +235,12 @@ function App() {
     }
   }, [activeDocument]);
 
-  // Handle play/pause button with enhanced position tracking
+  // Handle play/pause using the global position API
   const handlePlayPause = () => {
     if (!activeDocument || !docPages.length) return;
-    
     if (speaking) {
       if (paused) {
-        // Resume from the current position
+        // Resume from the current exact global character position
         resume();
         setIsPlaying(true);
       } else {
@@ -249,36 +248,36 @@ function App() {
         const context = getPlaybackContext();
         const currentPage = lastPositionRef.current.page;
         const pageStartPosition = docPages[currentPage - 1]?.startPosition || 0;
-        
+
         lastPositionRef.current = {
           page: currentPage,
           chunk: currentChunkIndex,
           position: context.wordIndex,
           globalPosition: pageStartPosition + context.wordIndex
         };
-        
-        // Save reading position to localStorage
         saveReadingPosition();
-        
         pause();
         setIsPlaying(false);
       }
     } else if (textChunks.length > 0) {
-      // If we have a saved position, try to resume from there
-      if (lastPositionRef.current.position > 0 && currentChunkIndex === lastPositionRef.current.chunk) {
-        speakFromPosition(lastPositionRef.current.position, { rate: playbackRate });
-      } else {
-        // Otherwise start from the beginning of the current chunk
-        speak(textChunks[currentChunkIndex], { rate: playbackRate });
-      }
-      
-      // Update playback context
+      // Always resume precisely using the new API, with voice/rate
+      speakFromGlobalPosition(
+        typeof lastPositionRef.current.globalPosition === "number"
+          ? lastPositionRef.current.globalPosition
+          : 0,
+        {
+          text: documentText,
+          chunks: textChunks,
+          voice: voices[selectedVoiceIndex],
+          rate: playbackRate
+        }
+      );
+
       setPlaybackContext({
         chunkIndex: currentChunkIndex,
         pageIndex: currentPage - 1,
         wordIndex: lastPositionRef.current.position
       });
-      
       setIsPlaying(true);
     }
   };
@@ -299,95 +298,91 @@ function App() {
     localStorage.setItem(positionKey, JSON.stringify(positionData));
   };
 
-  // Handle next chunk with enhanced page synchronization
+  // Handle next chunk navigation using precise global char position API
   const handleNext = () => {
     if (!activeDocument || currentChunkIndex >= textChunks.length - 1) return;
-    
+
     const nextChunkIndex = currentChunkIndex + 1;
     setCurrentChunkIndex(nextChunkIndex);
-    
-    // Use improved mapping to find the correct page for this chunk
+
+    // Find proper next page, update UI if needed
     if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[nextChunkIndex]) {
       const nextPage = chunkToPageMapping.chunkToPage[nextChunkIndex];
-      
-      // Update page if needed
       if (nextPage !== currentPage) {
         handlePageChange(nextPage, false); // Don't auto-start speaking
       }
     }
-    
-    // Handle playback
-    if (speaking) {
-      cancel();
-    }
-    
-    speak(textChunks[nextChunkIndex], { rate: playbackRate });
-    
-    // Update position tracking with global position
+
+    // Cancel existing playback
+    if (speaking) cancel();
+
+    // Use global character index for start of next chunk
     const chunkStart = chunkToPageMapping.chunkPositions?.[nextChunkIndex]?.start || 0;
+    speakFromGlobalPosition(chunkStart, {
+      text: documentText,
+      chunks: textChunks,
+      voice: voices[selectedVoiceIndex],
+      rate: playbackRate
+    });
+
     lastPositionRef.current = {
       page: currentPage,
       chunk: nextChunkIndex,
       position: 0,
       globalPosition: chunkStart
     };
-    
-    // Update playback context
+
     setPlaybackContext({
       chunkIndex: nextChunkIndex,
       pageIndex: currentPage - 1,
       wordIndex: 0
     });
-    
+
     setIsPlaying(true);
-    
-    // Save updated reading position
     saveReadingPosition();
   };
 
-  // Handle previous chunk with enhanced page synchronization
+  // Handle previous chunk navigation using global char position for seamless resume
   const handlePrevious = () => {
     if (!activeDocument || currentChunkIndex <= 0) return;
-    
+
     const prevChunkIndex = currentChunkIndex - 1;
     setCurrentChunkIndex(prevChunkIndex);
-    
-    // Use improved mapping to find the correct page for this chunk
+
+    // Page navigation if chunk change moves to a different page
     if (chunkToPageMapping.chunkToPage && chunkToPageMapping.chunkToPage[prevChunkIndex]) {
       const prevPage = chunkToPageMapping.chunkToPage[prevChunkIndex];
-      
-      // Update page if needed
       if (prevPage !== currentPage) {
         handlePageChange(prevPage, false); // Don't auto-start speaking
       }
     }
-    
-    // Handle playback
-    if (speaking) {
-      cancel();
-    }
-    
-    speak(textChunks[prevChunkIndex], { rate: playbackRate });
-    
-    // Update position tracking with global position
+
+    // Cancel any existing playback
+    if (speaking) cancel();
+
+    // Use global char index for start of previous chunk
     const chunkStart = chunkToPageMapping.chunkPositions?.[prevChunkIndex]?.start || 0;
+    speakFromGlobalPosition(chunkStart, {
+      text: documentText,
+      chunks: textChunks,
+      voice: voices[selectedVoiceIndex],
+      rate: playbackRate
+    });
+
     lastPositionRef.current = {
       page: currentPage,
       chunk: prevChunkIndex,
       position: 0,
       globalPosition: chunkStart
     };
-    
-    // Update playback context
+
     setPlaybackContext({
       chunkIndex: prevChunkIndex,
       pageIndex: currentPage - 1,
       wordIndex: 0
     });
-    
+
     setIsPlaying(true);
-    
-    // Save updated reading position
     saveReadingPosition();
   };
 
@@ -610,25 +605,41 @@ function App() {
     }
   };
 
-  // Handle voice change
+  // Handle voice change: resumes playback at the same global position using new voice, with state sync
   const handleVoiceChange = (e) => {
     const voiceIndex = parseInt(e.target.value);
     setSelectedVoiceIndex(voiceIndex);
-    
+
     if (voices && voices.length > 0) {
       setVoice(voices[voiceIndex]);
+      // Resume playback at current global char index with new voice
+      if (activeDocument && documentText && isPlaying && typeof lastPositionRef.current.globalPosition === "number") {
+        cancel();
+        speakFromGlobalPosition(lastPositionRef.current.globalPosition, {
+          text: documentText,
+          chunks: textChunks,
+          voice: voices[voiceIndex],
+          rate: playbackRate
+        });
+        setIsPlaying(true);
+      }
     }
   };
 
-  // Handle playback rate change
+  // Handle playback rate change: resumes playback at the same global position using new rate, with state sync
   const handlePlaybackRateChange = (e) => {
     const newRate = parseFloat(e.target.value);
     setPlaybackRate(newRate);
-    
-    // If currently speaking, update the rate
-    if (speaking && !paused) {
+    // If currently speaking and not paused, resume at the correct global char position with updated rate
+    if (activeDocument && documentText && isPlaying && typeof lastPositionRef.current.globalPosition === "number") {
       cancel();
-      speak(textChunks[currentChunkIndex], { rate: newRate });
+      speakFromGlobalPosition(lastPositionRef.current.globalPosition, {
+        text: documentText,
+        chunks: textChunks,
+        voice: voices[selectedVoiceIndex],
+        rate: newRate
+      });
+      setIsPlaying(true);
     }
   };
   
