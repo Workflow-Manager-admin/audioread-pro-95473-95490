@@ -324,7 +324,7 @@ function App() {
 
     // Force context reset/cancel before any logic
     clearAllHighlights();
-    cancel();
+    clearAllSpeechContext();
 
     const nextChunkIndex = currentChunkIndex + 1;
 
@@ -370,7 +370,7 @@ function App() {
 
     // Force context reset/cancel before any logic
     clearAllHighlights();
-    cancel();
+    clearAllSpeechContext();
 
     const prevChunkIndex = currentChunkIndex - 1;
 
@@ -416,7 +416,7 @@ function App() {
 
     // Force context reset/cancel before any logic
     clearAllHighlights();
-    cancel();
+    clearAllSpeechContext();
 
     // Locate the correct chunk and relative position (for tracking UI only)
     const { chunkIndex, relativePosition } = findChunkByPosition(totalOffset, textChunks);
