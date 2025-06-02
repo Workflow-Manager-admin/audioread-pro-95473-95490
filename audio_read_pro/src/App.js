@@ -504,39 +504,6 @@ function App() {
     saveReadingPosition();
   };
 
-  // --- UTIL: Canonical word splitting (mirror TTS and regex handling) ---
-  // Splits text into an array of words and non-word spans, with char offsets for each.
-  function splitTextToWordSpans(text, startOffset) {
-    const pattern = /([A-Za-z0-9'’\\-]+|[^\w\s]+)/g; // robust: words, apostrophes, dash, punctuation
-    const result = [];
-    let match;
-    let currentOffset = startOffset || 0;
-    let lastIndex = 0;
-
-    while ((match = pattern.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        // Push intervening whitespace as non-clickable
-        const ws = text.slice(lastIndex, match.index);
-        result.push({ text: ws, offset: currentOffset, word: false });
-        currentOffset += ws.length;
-      }
-      const wordText = match[0];
-      const isWord = /^[A-Za-z0-9'’\-]+$/.test(wordText);
-      result.push({ text: wordText, offset: currentOffset, word: isWord });
-      currentOffset += wordText.length;
-      lastIndex = match.index + wordText.length;
-    }
-    // Push trailing whitespace if any
-    if (lastIndex < text.length) {
-      result.push({
-        text: text.slice(lastIndex),
-        offset: currentOffset,
-        word: false
-      });
-    }
-    return result;
-  }
-
   // --- Robust clear all highlights: ---
   function clearAllHighlights() {
     document.querySelectorAll('.word-current, .word-spoken').forEach(el => {
@@ -563,6 +530,7 @@ function App() {
         return <p key={`p-${paraIndex}`}>&nbsp;</p>;
       }
 
+      // Use canonical utility for splitting into word/non-word spans
       const spans = splitTextToWordSpans(paragraph, runningOffset);
       runningOffset += paragraph.length + 1;
 
