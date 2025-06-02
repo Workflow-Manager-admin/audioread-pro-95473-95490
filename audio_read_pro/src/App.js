@@ -632,15 +632,11 @@ function App() {
     if (!wordData || typeof wordData.charIndex !== "number" || !wordData.word) return;
 
     // Find which page contains this charIndex
-    let pageIdx = 0;
-    for (let i = 0; i < docPages.length; i++) {
-      if (wordData.charIndex >= docPages[i].startPosition && wordData.charIndex < docPages[i].endPosition) {
-        pageIdx = i;
-        break;
-      }
-    }
-    // If not found, fallback to currentPage - 1 but clamp range
-    if (docPages.length > 0 && (pageIdx < 0 || pageIdx >= docPages.length)) {
+    let pageIdx = docPages.findIndex(page =>
+      wordData.charIndex >= page.startPosition && wordData.charIndex < page.endPosition
+    );
+    if (pageIdx === -1) {
+      // fallback to previous/current page as best effort
       pageIdx = Math.max(0, Math.min(currentPage - 1, docPages.length - 1));
     }
 
@@ -652,21 +648,32 @@ function App() {
 
     const pageStartPosition = docPages[pageIdx]?.startPosition || 0;
     const relativeCharIndex = wordData.charIndex - pageStartPosition;
-    // The word key algorithm must match that in renderTextWithClickableWords
-    const wordKey = `word-${relativeCharIndex}-${wordData.word}`;
+    // Word key for highlight lookup
+    let wordKey = `word-${relativeCharIndex}-${wordData.word}`;
 
-    // Find the closest matching word element as fallback
+    // Find the closest matching word element robustly
     let wordElementId = wordElementsRef.current[wordKey];
     if (!wordElementId) {
-      // Fallback: search for a close match (for punctuation or off-by-one errors)
+      // Greedy fallback: find a nearby key with the same word, allow slightly larger window (for hyphens etc)
       const altKey = Object.keys(wordElementsRef.current).find(key =>
-        key.endsWith(`-${wordData.word}`) && Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 6
+        key.endsWith(`-${wordData.word}`) &&
+        Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 12 // allow bigger slop
       );
       wordElementId = (altKey && wordElementsRef.current[altKey]) || `word-${relativeCharIndex}-${wordData.word}`;
     }
-    const wordElement = document.getElementById(wordElementId);
+    let wordElement = document.getElementById(wordElementId);
 
-    // Always clean up previous highlight
+    // As an ultimate fallback, if not found but word has length > 2, search by just charIndex
+    if (!wordElement && wordData.word.length > 2) {
+      // Get any word at the approximate position (for words next to punctuation)
+      const altKey = Object.keys(wordElementsRef.current).find(key =>
+        Math.abs(parseInt(key.split('-')[1]) - relativeCharIndex) < 3
+      );
+      wordElementId = (altKey && wordElementsRef.current[altKey]) || wordElementId;
+      wordElement = document.getElementById(wordElementId);
+    }
+
+    // Clean up previous highlight
     if (currentWordRef.current) {
       const prevWordElement = document.getElementById(currentWordRef.current);
       if (prevWordElement) {
@@ -678,6 +685,10 @@ function App() {
     if (wordElement) {
       currentWordRef.current = wordElementId;
       wordElement.classList.add('word-current');
+      // Remove spoken highlight from previous word after a delay for visible effect
+      setTimeout(() => {
+        if (wordElement) wordElement.classList.remove('word-spoken');
+      }, 100);
 
       if (autoScrollingRef.current && documentContentRef.current) {
         wordElement.scrollIntoView({
