@@ -293,10 +293,11 @@ export const mapChunksToPages = (chunks, pages) => {
  * @param {Array} pages - Array of page objects
  * @returns {Object} Page and position information
  */
+// PUBLIC_INTERFACE
 export const getPositionInfo = (charOffset, mapping, pages) => {
-  // Find which page contains this character position
+  // Find which page contains this character position (END is exclusive for proper range matching).
   const pageNumber = pages.findIndex(page => 
-    charOffset >= page.startPosition && charOffset <= page.endPosition
+    charOffset >= page.startPosition && charOffset < page.endPosition
   ) + 1;
   
   if (pageNumber === 0) {
