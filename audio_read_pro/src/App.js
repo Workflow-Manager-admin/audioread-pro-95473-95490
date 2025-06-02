@@ -925,6 +925,27 @@ function App() {
     return <div className="error-message">Text-to-speech is not supported in your browser.</div>;
   }
 
+  // Defensive: render sync/fatal SpeechSynthesis error banner
+  if (speechFatalSync) {
+    return (
+      <div style={{
+        background: '#fff3cd',
+        color: '#856404',
+        border: '1px solid #ffeeba',
+        borderRadius: 4,
+        padding: '18px 20px',
+        margin: 30,
+        maxWidth: 680,
+        fontWeight: 500
+      }}>
+        <span>
+          <b>Audio Playback Error:</b> The browser's Text-to-Speech engine lost synchronization or is unavailable.<br/>
+          Please <b>refresh your browser</b> to restore audio controls. If the problem persists, try a different browser.
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <div className="container">
