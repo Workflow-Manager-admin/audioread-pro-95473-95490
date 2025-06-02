@@ -210,22 +210,19 @@ function App() {
   const handlePlayPause = () => {
     if (!activeDocument || !docPages.length) return;
 
-    // Always reset context and highlights
     clearAllHighlights();
     clearAllSpeechContext();
+    setSpeechFatalSync(false); // on user retry, clear banner
 
     if (speaking) {
       if (paused) {
-        // Resume playback at current canonical word boundary
         resume();
         setIsPlaying(true);
+        setSpeechFatalSync(false);
       } else {
-        // When pausing, save the most up-to-date char index
         const context = getPlaybackContext();
-        // WordIndex may be a char offset due to mapping policy; normalize to exact canonical
         const currentPageNum = lastPositionRef.current.page;
         const pageStartPosition = docPages[currentPageNum - 1]?.startPosition || 0;
-        // Save canonical position (never skip first word)
         lastPositionRef.current = {
           page: currentPageNum,
           chunk: currentChunkIndex,
@@ -237,12 +234,10 @@ function App() {
         setIsPlaying(false);
       }
     } else if (textChunks.length > 0) {
-      // Defensive: always use canonical start (never allow TTS to skip the first word)
       const preciseGlobal =
         typeof lastPositionRef.current.globalPosition === "number"
           ? lastPositionRef.current.globalPosition
           : 0;
-      // Always start using canonical boundary (splitTextToWordSpans) logic
       speakFromGlobalPosition(preciseGlobal, {
         text: documentText,
         chunks: textChunks,
@@ -256,6 +251,7 @@ function App() {
         wordIndex: lastPositionRef.current.position
       });
       setIsPlaying(true);
+      setSpeechFatalSync(false);
     }
   };
 
