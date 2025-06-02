@@ -253,6 +253,7 @@ const useSpeechSynthesis = () => {
    *   }
    * @returns {void}
    */
+  // PUBLIC_INTERFACE
   function speakFromGlobalPosition(globalCharIndex, options = {}) {
     // Validate input
     if (
@@ -265,39 +266,82 @@ const useSpeechSynthesis = () => {
 
     const { text, chunks, voice, rate, pitch, volume } = options;
 
-    // Find target chunk and in-chunk position for globalCharIndex
+    // Compute canonical word boundary from splitTextToWordSpans
+    let canonicalWordOffset = globalCharIndex;
+    let wordSpans;
+    try {
+      wordSpans = splitTextToWordSpans(text, 0);
+      // Pick the *exact* canonical global offset for this char index (so we jump to the exact start of the intended word)
+      if (wordSpans.length > 0) {
+        // If the input offset falls inside a word span, move start to that span's offset; else, clamp to next word
+        let found = null;
+        for (let i = 0; i < wordSpans.length; i++) {
+          const s = wordSpans[i];
+          if (
+            s.word &&
+            typeof s.offset === 'number' &&
+            globalCharIndex >= s.offset &&
+            globalCharIndex < s.offset + s.text.length
+          ) {
+            found = s;
+            break;
+          }
+        }
+        if (found) {
+          canonicalWordOffset = found.offset;
+        } else {
+          // Fallback: snap to first word after the supplied offset
+          for (let i = 0; i < wordSpans.length; i++) {
+            const s = wordSpans[i];
+            if (s.word && typeof s.offset === 'number' && s.offset > globalCharIndex) {
+              canonicalWordOffset = s.offset;
+              break;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // fallback: remain at requested char index
+      wordSpans = [];
+      canonicalWordOffset = globalCharIndex;
+    }
+
+    // Re-identify which chunk and relative char we need to start at
     let accumulatedLength = 0;
     let targetChunkIndex = 0;
     let relativeIndex = 0;
     for (let i = 0; i < chunks.length; i++) {
-      const chunkLength = chunks[i].length;
+      const chunkLen = chunks[i].length;
       if (
-        globalCharIndex >= accumulatedLength &&
-        globalCharIndex < accumulatedLength + chunkLength
+        canonicalWordOffset >= accumulatedLength &&
+        canonicalWordOffset < accumulatedLength + chunkLen
       ) {
         targetChunkIndex = i;
-        relativeIndex = globalCharIndex - accumulatedLength;
+        relativeIndex = canonicalWordOffset - accumulatedLength;
         break;
       }
-      accumulatedLength += chunkLength;
+      accumulatedLength += chunkLen;
     }
-    // Edge case: if char index is beyond last, play from end
-    if (globalCharIndex >= accumulatedLength + (chunks[chunks.length - 1]?.length || 0)) {
+    // Defensive: if offset is beyond text, clamp
+    if (
+      canonicalWordOffset >= accumulatedLength +
+        (chunks[chunks.length - 1]?.length || 0)
+    ) {
       targetChunkIndex = chunks.length - 1;
       relativeIndex = Math.max(0, chunks[chunks.length - 1]?.length - 1);
     }
 
-    // Cancel any active speech
+    // Cancel any active speech before new utterance to enforce correct boundary events
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
 
-    // Build utterance config
+    // Prepare to speak
     const chunkText = chunks[targetChunkIndex];
     const utterStart = relativeIndex;
     const textToSpeak = chunkText.substring(utterStart);
 
-    // Choose voice
+    // Enforce explicit voice and options
     let useVoice = null;
     if (voice) {
       useVoice = voice;
@@ -306,96 +350,88 @@ const useSpeechSynthesis = () => {
       useVoice = selectedVoiceRef.current;
     }
 
-    // Compile utterance speech options
     const utterOpts = {
       rate: rate ?? 1,
       pitch: pitch ?? 1,
       volume: volume ?? 1,
     };
 
-    // Create utterance and assign settings
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    // Create utterance and canonical settings
+    const utterance = new window.SpeechSynthesisUtterance(textToSpeak);
     if (useVoice) utterance.voice = useVoice;
-    Object.keys(utterOpts).forEach(key => {
+    Object.keys(utterOpts).forEach((key) => {
       if (utterOpts[key] !== undefined && key in utterance) utterance[key] = utterOpts[key];
     });
+
+    // Defensive: Prevent duplicate/bogus boundary events on browser quirks
+    let emittedOffsets = new Set();
 
     // End handler: update speaking flags
     const handleEnd = () => {
       utteranceRef.current = null;
       setSpeaking(false);
       setPaused(false);
+      emittedOffsets.clear();
     };
     utterance.onend = handleEnd;
     utterance.onerror = handleEnd;
 
-    // Word boundary event: synchronize highlight using global char index
+    // Canonical boundary: always use splitTextToWordSpans mapping
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
-        // --- Always use splitTextToWordSpans as the sole mapping for boundary-to-word synchronization ---
+        // Compute *true* global char index for spoken word
         const localCharIdx = event.charIndex;
         const globalIndex = accumulatedLength + utterStart + localCharIdx;
 
-        let wordSpans;
-        try {
-          // Canonical mapping: always use full original text, global 0 offset
-          wordSpans = splitTextToWordSpans(text || textToSpeak || '', 0);
-        } catch (err) {
-          wordSpans = [];
-        }
-
-        // Robust: Find the span containing globalIndex and which is a word
         let foundSpan = null;
-        for (let i = 0; i < wordSpans.length; i++) {
-          const span = wordSpans[i];
-          if (
-            span &&
-            typeof span.offset === 'number' &&
-            span.word &&
-            globalIndex >= span.offset &&
-            globalIndex < span.offset + span.text.length
-          ) {
-            foundSpan = span;
-            break;
-          }
-        }
-        // Defensive fallback: Select last span <= globalIndex within 50 chars, or null
-        if (!foundSpan) {
-          let best = null;
-          let closestDist = Infinity;
+        if (Array.isArray(wordSpans) && wordSpans.length > 0) {
           for (let i = 0; i < wordSpans.length; i++) {
-            const s = wordSpans[i];
+            const span = wordSpans[i];
             if (
-              s &&
-              s.word &&
-              typeof s.offset === 'number' &&
-              s.offset <= globalIndex &&
-              globalIndex - s.offset < closestDist &&
-              globalIndex - s.offset < 50
+              span &&
+              typeof span.offset === 'number' &&
+              span.word &&
+              globalIndex >= span.offset &&
+              globalIndex < span.offset + span.text.length
             ) {
-              closestDist = globalIndex - s.offset;
-              best = s;
+              foundSpan = span;
+              break;
             }
           }
-          foundSpan = best;
+          // Fallback: nearest preceding span within 50 chars as word sync, but only if no span matched
+          if (!foundSpan) {
+            let best = null, closestDist = Infinity;
+            for (let i = 0; i < wordSpans.length; i++) {
+              const s = wordSpans[i];
+              if (
+                s &&
+                s.word &&
+                typeof s.offset === 'number' &&
+                s.offset <= globalIndex &&
+                globalIndex - s.offset < closestDist &&
+                globalIndex - s.offset < 50
+              ) {
+                best = s;
+                closestDist = globalIndex - s.offset;
+              }
+            }
+            foundSpan = best;
+          }
         }
 
         let wordMatch = '';
         let charIdx = globalIndex;
-
         if (foundSpan) {
           wordMatch = foundSpan.text;
           charIdx = foundSpan.offset;
         } else {
-          // Defensive fallback: try to get character at globalIndex if wordish, else empty
-          const rawChar =
-            typeof text === 'string' && globalIndex < text.length
-              ? text.charAt(globalIndex)
-              : '';
+          // Defensive fallback: get the character if wordish, else nothing
+          const rawChar = typeof text === 'string' && globalIndex < text.length
+            ? text.charAt(globalIndex) : '';
           wordMatch = /\w/.test(rawChar) ? rawChar : '';
           charIdx = globalIndex;
         }
-        // Out-of-bounds/end: fallback to empty and clamp
+        // Prevent out-of-range
         if (
           typeof wordMatch === 'string' &&
           typeof charIdx === 'number' &&
@@ -404,6 +440,10 @@ const useSpeechSynthesis = () => {
         ) {
           wordMatch = '';
         }
+
+        // Defensive deduplication: Guarantee only emit word boundary highlight ONCE per offset.
+        if (emittedOffsets.has(charIdx)) return;
+        emittedOffsets.add(charIdx);
 
         lastWordRef.current = wordMatch;
         currentPositionRef.current = charIdx;
@@ -436,7 +476,7 @@ const useSpeechSynthesis = () => {
       }
     };
 
-    // Store control refs for API
+    // Store playback/position refs for accurate resume
     utteranceRef.current = utterance;
     currentTextRef.current = chunkText;
     currentPositionRef.current = accumulatedLength + utterStart;
