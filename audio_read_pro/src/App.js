@@ -691,21 +691,18 @@ function App() {
     }
   };
   
-  // Handle word boundary events for auto-scrolling and highlighting
-  // Enhanced: Always use updated wordData.charIndex (global offset) to find and apply highlight
+  // Handle word boundary events for auto-scrolling & precise highlighting (robust and unambiguous)
   const handleWordBoundary = useCallback((wordData) => {
     if (!wordData || typeof wordData.charIndex !== "number" || !wordData.word) return;
 
-    // Find which page contains this charIndex
+    // Find the correct page
     let pageIdx = docPages.findIndex(page =>
       wordData.charIndex >= page.startPosition && wordData.charIndex < page.endPosition
     );
-    if (pageIdx === -1) {
-      // fallback to previous/current page as best effort
+    if (pageIdx === -1)
       pageIdx = Math.max(0, Math.min(currentPage - 1, docPages.length - 1));
-    }
 
-    // If page has changed (due to seeking), update current page to sync highlight
+    // If page has changed (due to seek), update UI sync
     if ((pageIdx + 1) !== currentPage) {
       setCurrentPage(pageIdx + 1);
       setCurrentPageText(docPages[pageIdx]?.text || '');
@@ -713,80 +710,43 @@ function App() {
 
     const pageStartPosition = docPages[pageIdx]?.startPosition || 0;
     const relativeCharIndex = wordData.charIndex - pageStartPosition;
+    const canonicalKey = `word-${relativeCharIndex}-${wordData.word}`.replace(/\s+/g, '').toLowerCase();
+    let wordElement = null;
 
-    // __ Robust lookup, normalized/whitespace-safe keys __
-    let wordKey = `word-${relativeCharIndex}-${wordData.word}`;
-    wordKey = wordKey.replace(/\s+/g, '').toLowerCase();
+    // Clear all previous highlights before applying new one
+    clearAllHighlights();
 
-    // Attempt direct key->id match
-    let wordElementId = wordElementsRef.current[wordKey];
-    let wordElement = wordElementId ? document.getElementById(wordElementId) : null;
-
-    // Fallback: try nearby id/key match for the same word
-    if (!wordElement) {
-      const possibleKeys = Object.entries(wordElementsRef.current);
-      let bestDistance = Number.MAX_SAFE_INTEGER, candidateId = null;
-      for (const [key, id] of possibleKeys) {
-        const match = key.match(/^word-(-?\d+)-(.+)$/);
-        if (match) {
-          const charIdx = parseInt(match[1]);
-          const w = match[2];
-          if (
-            w.replace(/\s+/g, '').toLowerCase() === wordData.word.replace(/\s+/g, '').toLowerCase() &&
-            Math.abs(charIdx - relativeCharIndex) < 7
-          ) {
-            const dist = Math.abs(charIdx - relativeCharIndex);
-            if (dist < bestDistance) {
-              bestDistance = dist;
-              candidateId = id;
-            }
-          }
-        }
-      }
-      if (candidateId) {
-        wordElementId = candidateId;
-        wordElement = document.getElementById(wordElementId);
-      }
+    // Direct map by canonical key
+    if (wordElementsRef.current[canonicalKey]) {
+      wordElement = document.getElementById(wordElementsRef.current[canonicalKey]);
     }
 
-    // As a last resort, search for a span in the page content with matching text and closest offset.
-    if (!wordElement) {
-      const docContent = documentContentRef.current;
-      if (docContent) {
-        const spans = docContent.querySelectorAll('span.clickable-word');
-        let bestMatch = null;
-        let bestDist = Number.MAX_SAFE_INTEGER;
-        spans.forEach(el => {
-          const elWord = (el.textContent || '').replace(/\s+/g, '').toLowerCase();
-          if (elWord === wordData.word.replace(/\s+/g, '').toLowerCase()) {
-            const offset = Number(el.getAttribute('data-offset'));
-            const dist = Math.abs(offset - wordData.charIndex);
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestMatch = el;
-            }
+    // If not found, fallback: try searching for nearest word span with matching offset
+    if (!wordElement && documentContentRef.current) {
+      const spans = documentContentRef.current.querySelectorAll('span.clickable-word');
+      let bestMatch = null, bestDist = 1000;
+      spans.forEach(el => {
+        if ((el.textContent || '').trim().toLowerCase() === wordData.word.trim().toLowerCase()) {
+          const offset = Number(el.getAttribute('data-offset'));
+          const dist = Math.abs(offset - wordData.charIndex);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestMatch = el;
           }
-        });
-        if (bestMatch) {
-          wordElement = bestMatch;
-          wordElementId = bestMatch.id || null;
         }
-      }
+      });
+      if (bestMatch) wordElement = bestMatch;
     }
 
-    // Clean up previous highlight
-    if (currentWordRef.current) {
-      const prevWordElement = document.getElementById(currentWordRef.current);
-      if (prevWordElement) {
-        prevWordElement.classList.remove('word-current');
-        prevWordElement.classList.add('word-spoken');
-      }
+    // Highlight/unhighlight as appropriate
+    if (currentWordRef.current && currentWordRef.current !== wordElement?.id) {
+      const prevWord = document.getElementById(currentWordRef.current);
+      if (prevWord) prevWord.classList.remove('word-current', 'word-spoken');
     }
 
     if (wordElement) {
-      currentWordRef.current = wordElementId;
+      currentWordRef.current = wordElement.id;
       wordElement.classList.add('word-current');
-      // Remove spoken highlight from previous word after a delay for visible effect
       setTimeout(() => {
         if (wordElement) wordElement.classList.remove('word-spoken');
       }, 100);
@@ -799,7 +759,6 @@ function App() {
         });
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docPages, currentPage]);
 
   // Save bookmarks with current active document
