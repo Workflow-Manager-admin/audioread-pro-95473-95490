@@ -294,10 +294,10 @@ export const mapChunksToPages = (chunks, pages) => {
  * @param {number} [startOffset=0] - The starting global char offset
  * @returns {Array<{text: string, offset: number, word: boolean}>}
  */
-// PUBLIC_INTERFACE
 export function splitTextToWordSpans(text, startOffset = 0) {
-  // Robust: words, apostrophes, dash, punctuation
-  const pattern = /([A-Za-z0-9\'’\-]+|[^\w\s]+)/g;
+  // Robust: words, apostrophes (both ASCII and curly), dash, punctuation
+  // Unescaped - and ' since not needed inside a character class if placed last (linter: unnecessary escapes)
+  const pattern = /([A-Za-z0-9'’-]+|[^\w\s]+)/g;
   const result = [];
   let match;
   let currentOffset = startOffset;
@@ -311,7 +311,7 @@ export function splitTextToWordSpans(text, startOffset = 0) {
       currentOffset += ws.length;
     }
     const wordText = match[0];
-    const isWord = /^[A-Za-z0-9\'’\-]+$/.test(wordText);
+    const isWord = /^[A-Za-z0-9'’-]+$/.test(wordText);
     result.push({ text: wordText, offset: currentOffset, word: isWord });
     currentOffset += wordText.length;
     lastIndex = match.index + wordText.length;
